@@ -127,6 +127,11 @@ function barsH(rows,color){
    <b style="font-variant-numeric:tabular-nums;white-space:nowrap">${r.t}</b></div>
   <div class="bar"><i style="width:${(r.v/max*100).toFixed(1)}%;background:${color||'var(--s1)'}"></i></div></div>`).join('');
 }
+/* tabla que en el celular se convierte en tarjetas */
+function tbl(cols,filas){
+ return `<div class="tw"><table><thead><tr>${cols.map(c=>`<th${c.n?' class="num"':''}>${esc(c.t)}</th>`).join('')}</tr></thead>
+ <tbody>${filas.map(f=>`<tr>${f.map((c,i)=>`<td${cols[i].n?' class="num"':''} data-l="${esc(cols[i].t)}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
 function vacio(txt,btn){
  return `<div class="empty"><p>${txt}</p>${btn?`<button class="btn pri" onclick="${btn.fn}">${esc(btn.t)}</button>`:''}</div>`;
 }
@@ -299,11 +304,12 @@ V.ventas=()=>{
   <div class="chead"><div><h3>Ventas de ${MESES[MES]} ${AÑO}</h3>
    <p class="sub">${vm.length} operaciones · ${money(fact(vm))}</p></div>
    <button class="btn pri" onclick="nuevaVenta()">+ Cargar venta</button></div>
-  ${vm.length?`<div class="tw"><table><thead><tr><th>Fecha</th><th>Cuenta</th><th>Producto</th><th class="num">Unid.</th><th class="num">Total</th><th>Origen</th></tr></thead><tbody>
-  ${vm.map(v=>`<tr><td>${fmtF(v.f)}</td><td><b>${esc(C(v.c)?.n||'—')}</b></td>
-   <td>${esc(P(v.p)?.n||v.p)}<div class="mini">${esc(P(v.p)?.pres||'')}</div></td>
-   <td class="num">${v.u}</td><td class="num">${money(v.u*v.pu)}</td><td><span class="tag">${esc(v.o)}</span></td></tr>`).join('')}
-  </tbody></table></div>`:vacio('No hay ventas cargadas en '+MESES[MES]+'.',{t:'+ Cargar venta',fn:'nuevaVenta()'})}
+  ${vm.length?tbl(
+   [{t:'Fecha'},{t:'Cuenta'},{t:'Producto'},{t:'Unid.',n:1},{t:'Total',n:1},{t:'Origen'}],
+   vm.map(v=>[fmtF(v.f),`<b>${esc(C(v.c)?.n||'—')}</b>`,
+    `${esc(P(v.p)?.n||v.p)}<div class="mini">${esc(P(v.p)?.pres||'')}</div>`,
+    v.u,money(v.u*v.pu),`<span class="tag">${esc(v.o)}</span>`]))
+  :vacio('No hay ventas cargadas en '+MESES[MES]+'.',{t:'+ Cargar venta',fn:'nuevaVenta()'})}
  </div>`;
 };
 
@@ -320,16 +326,16 @@ V.cuentas=()=>{
    :vacio('Todavía no hay cuentas. Empezá por las instituciones con las que ya venís caminando.',{t:'+ Nueva institución',fn:'nuevaCuenta()'})}
  </div>
  ${CUENTAS.length?`<div class="card"><h3>Cuentas</h3><p class="sub">Instituciones, farmacias, distribuidores y profesionales</p>
- <div class="tw"><table><thead><tr><th>Cuenta</th><th>Tipo</th><th>Zona</th><th>Referente</th><th>Estado</th><th class="num">Facturado ${AÑO}</th><th class="num">Últ. compra</th><th></th></tr></thead><tbody>
- ${CUENTAS.map(c=>{const vs=VENTAS.filter(v=>v.c===c.id);
-  const ult=vs.length?MESES[Math.max(...vs.map(v=>v.m))]:'—';
-  const st=['Activa','Recurrente'].includes(c.e)?'t-good':c.e==='Dormida'?'t-crit':c.e==='Prospecto'?'':'t-warn';
-  return `<tr><td><b>${esc(c.n)}</b>${c.mail?`<div class="mini">${esc(c.mail)}</div>`:''}</td><td>${esc(c.t)}</td><td>${esc(c.z)}</td>
-   <td>${esc(c.ref||'—')}${c.tel?`<div class="mini">${esc(c.tel)}</div>`:''}</td>
-   <td><span class="tag ${st}"><span class="d"></span>${esc(c.e)}</span></td>
-   <td class="num">${vs.length?money(fact(vs)):'—'}</td><td class="num">${ult}</td>
-   <td class="num"><button class="linkbtn" onclick="nuevaCuenta(${c.id})">editar</button></td></tr>`}).join('')}
- </tbody></table></div></div>`:''}`;
+ ${tbl([{t:'Cuenta'},{t:'Tipo'},{t:'Zona'},{t:'Referente'},{t:'Estado'},{t:'Facturado '+AÑO,n:1},{t:'Últ. compra',n:1},{t:''}],
+  CUENTAS.map(c=>{const vs=VENTAS.filter(v=>v.c===c.id);
+   const ult=vs.length?MESES[Math.max(...vs.map(v=>v.m))]:'—';
+   const st=['Activa','Recurrente'].includes(c.e)?'t-good':c.e==='Dormida'?'t-crit':c.e==='Prospecto'?'':'t-warn';
+   return [`<b>${esc(c.n)}</b>${c.mail?`<div class="mini">${esc(c.mail)}</div>`:''}`,esc(c.t),esc(c.z),
+    `${esc(c.ref||'—')}${c.tel?`<div class="mini">${esc(c.tel)}</div>`:''}`,
+    `<span class="tag ${st}"><span class="d"></span>${esc(c.e)}</span>`,
+    vs.length?money(fact(vs)):'—',ult,
+    `<button class="linkbtn" onclick="nuevaCuenta(${c.id})">editar</button>`];}))}
+ </div>`:''}`;
 };
 
 V.catalogo=()=>{
@@ -376,12 +382,10 @@ V.stock=()=>{
   <div class="card tile"><div class="lbl">Productos en quiebre</div><div class="val" style="color:var(--serious)">${bajo.length}</div><div class="dlt">bajo el mínimo de ${MIN_STOCK} unidades</div></div>
  </div>
  <div class="card"><h3>Lotes</h3><p class="sub">Orden FEFO — primero el que vence antes</p>
- <div class="tw"><table><thead><tr><th>Producto</th><th>Lote</th><th class="num">Unid.</th><th>Vence</th><th class="num">Días</th><th>Estado</th></tr></thead><tbody>
- ${rows.map(r=>{const[n,t]=nivelVto(r.d);
-  return `<tr><td><b>${esc(P(r.l.p)?.n||r.l.p)}</b><div class="mini">${esc(P(r.l.p)?.pres||'')}</div></td>
-   <td>${esc(r.l.l)}</td><td class="num">${r.l.u}</td><td>${fmtF(r.l.v)}</td><td class="num">${r.d}</td>
-   <td><span class="tag t-${n}"><span class="d"></span>${t}</span></td></tr>`}).join('')}
- </tbody></table></div>
+ ${tbl([{t:'Producto'},{t:'Lote'},{t:'Unid.',n:1},{t:'Vence'},{t:'Días',n:1},{t:'Estado'}],
+  rows.map(r=>{const[n,t]=nivelVto(r.d);
+   return [`<b>${esc(P(r.l.p)?.n||r.l.p)}</b><div class="mini">${esc(P(r.l.p)?.pres||'')}</div>`,
+    esc(r.l.l),r.l.u,fmtF(r.l.v),r.d,`<span class="tag t-${n}"><span class="d"></span>${t}</span>`];}))}
  <p class="src">Al cargar una venta se descuenta del lote más próximo a vencer. La próxima sincronización vuelve a tomar los números de logística.</p></div>`
  :vacio('Sin stock cargado todavía.',{t:'Conectar planilla de logística',fn:'configSheet()'})}`;
 };
@@ -398,12 +402,12 @@ V.acciones=()=>{
  <div class="card"><div class="chead"><div><h3>Acciones de marketing</h3>
    <p class="sub">Cada acción con su inversión y su trazabilidad hacia la venta</p></div>
    <button class="btn pri" onclick="nuevaAccion()">+ Nueva acción</button></div>
- ${ACCIONES.length?`<div class="tw"><table><thead><tr><th>Acción</th><th>Tipo</th><th>Fecha</th><th class="num">Inversión</th><th class="num">Contactos</th><th class="num">Cuentas</th><th>Estado</th></tr></thead><tbody>
- ${ACCIONES.map(a=>`<tr><td><b>${esc(a.n)}</b></td><td>${esc(a.t)}</td><td>${fmtF(a.f)}</td>
-  <td class="num">${a.inv?money(a.inv):'—'}</td><td class="num">${a.cont}</td><td class="num">${a.cta}</td>
-  <td><span class="tag ${a.est==='Cerrada'?'t-good':a.est==='En curso'?'t-warn':''}"><span class="d"></span>${esc(a.est)}</span></td></tr>`).join('')}
- </tbody></table></div>
- <p class="src">Toda pieza requiere validación técnica y regulatoria antes de publicarse o imprimirse.</p>`
+ ${ACCIONES.length?tbl(
+  [{t:'Acción'},{t:'Tipo'},{t:'Fecha'},{t:'Inversión',n:1},{t:'Contactos',n:1},{t:'Cuentas',n:1},{t:'Estado'}],
+  ACCIONES.map(a=>[`<b>${esc(a.n)}</b>${a.nota?`<details class="nota"><summary>ver detalle</summary><p>${esc(a.nota)}</p></details>`:''}`,
+   esc(a.t),fmtF(a.f),a.inv?money(a.inv):'—',a.cont,a.cta,
+   `<span class="tag ${a.est==='Cerrada'?'t-good':a.est==='En curso'?'t-warn':''}"><span class="d"></span>${esc(a.est)}</span>`]))
+ +'<p class="src">Toda pieza requiere validación técnica y regulatoria antes de publicarse o imprimirse.</p>'
  :vacio('Sin acciones cargadas. Cargá las que ya hicieron: jornadas, capacitaciones, muestreos, pautas.',{t:'+ Nueva acción',fn:'nuevaAccion()'})}
  </div>`;
 };
@@ -423,12 +427,11 @@ V.base=()=>{
   </div>`:''}
  </div>
  <div class="card">${CONTACTOS.length?`<h3>Contactos</h3><p class="sub">${CONTACTOS.length} registros</p>
- <div class="tw"><table><thead><tr><th>Nombre</th><th>Rol</th><th>Institución</th><th>Contacto</th><th>Origen</th><th>Alta</th><th>Cuenta</th></tr></thead><tbody>
- ${CONTACTOS.map(c=>`<tr><td><b>${esc(c.n)}</b>${c.cons?' <span class="tag t-good" style="padding:1px 7px">consiente</span>':''}</td>
-  <td>${esc(c.r)}</td><td>${esc(c.i)}</td><td class="mini">${esc(c.mail||'')}${c.tel?'<br>'+esc(c.tel):''}</td>
-  <td><span class="tag">${esc(c.o)}</span></td><td>${fmtF(c.f)}</td>
-  <td>${c.cta?esc(C(c.cta)?.n||''):'<span class="mini">sin vincular</span>'}</td></tr>`).join('')}
- </tbody></table></div>
+ ${tbl([{t:'Nombre'},{t:'Rol'},{t:'Institución'},{t:'Contacto'},{t:'Origen'},{t:'Alta'},{t:'Cuenta'}],
+  CONTACTOS.map(c=>[`<b>${esc(c.n)}</b>${c.cons?' <span class="tag t-good" style="padding:1px 7px">consiente</span>':''}`,
+   esc(c.r),esc(c.i),`<span class="mini">${esc(c.mail||'')}${c.tel?'<br>'+esc(c.tel):''}</span>`,
+   `<span class="tag">${esc(c.o)}</span>`,fmtF(c.f),
+   c.cta?esc(C(c.cta)?.n||''):'<span class="mini">sin vincular</span>']))}
  <p class="src">Consentimiento y finalidad por contacto (Ley 25.326). Sin eso, la base no se puede usar para envíos.</p>`
  :vacio('La base está vacía. Cargá los contactos de las jornadas, universidades y visitas, o importá un CSV.',{t:'+ Nuevo contacto',fn:'nuevoContacto()'})}</div>`;
 };
@@ -501,7 +504,8 @@ const TIT={panel:['Panel <em>comercial</em>','Vista general de la línea'],
  base:['Base de <em>datos</em>','Contactos unificados por origen'],
  reportes:['<em>Reportes</em>','Exportación mensual']};
 let VISTA='panel';
-function ir(v){VISTA=v;document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('on',b.dataset.v===v));render();}
+function ir(v){VISTA=v;document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+ cerrarMenu();render();window.scrollTo({top:0,behavior:'smooth'});}
 
 function render(){
  $('#views').innerHTML=V[VISTA]();
@@ -541,10 +545,15 @@ async function boot(){
  sel.value=MES;
  render();
  if(CFG_SHEET.url&&CFG_SHEET.auto)sincronizar();
+ setTimeout(()=>bienvenida(),400);
 }
 document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>ir(b.dataset.v)));
 $('#periodo').addEventListener('change',e=>{MES=+e.target.value;render();});
-$('#newSale').addEventListener('click',()=>nuevaVenta());
+document.querySelectorAll('.js-venta').forEach(b=>b.addEventListener('click',()=>nuevaVenta()));
+document.querySelectorAll('.js-ayuda').forEach(b=>b.addEventListener('click',ayuda));
+$('#burger').addEventListener('click',abrirMenu);
+$('#backdrop').addEventListener('click',cerrarMenu);
+addEventListener('keydown',e=>{if(e.key==='Escape'){cerrarMenu();if(tour.activo)tour.cerrar();}});
 $('#csvIn').addEventListener('change',e=>{if(e.target.files[0])importarCSV(e.target.files[0]);e.target.value='';});
 document.addEventListener('mousemove',e=>{if(tip.style.opacity==1)moveTip(e);});
 $('#loginForm').addEventListener('submit',async e=>{

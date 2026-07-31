@@ -241,3 +241,131 @@ code{background:var(--celeste);padding:1px 5px;border-radius:4px;font-size:11.5p
 
 /* ---------- alertas de vencimiento ---------- */
 .a-good{background:var(--verde-050)}
+
+/* ==========================================================
+   Barra superior, menú lateral y botón flotante (celular)
+   ========================================================== */
+.mtop{display:none;position:sticky;top:0;z-index:40;background:var(--surface);
+ border-bottom:1px solid var(--border);padding:10px 12px;align-items:center;gap:10px}
+.mini-brand{padding:0;flex:1;align-items:center}
+.mini-brand b{font-size:15px}
+.mini-brand span{font-size:8.5px}
+.icobtn{border:1px solid var(--border);background:var(--surface);color:var(--navy);width:38px;height:38px;
+ border-radius:999px;cursor:pointer;font-size:15px;display:grid;place-items:center;flex:none;box-shadow:var(--sh-sm)}
+.icobtn:hover{background:var(--celeste)}
+.backdrop{position:fixed;inset:0;background:rgba(12,26,43,.45);z-index:49;opacity:0;pointer-events:none;transition:opacity .2s}
+body.menu-on .backdrop{opacity:1;pointer-events:auto}
+.fab{display:none;position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:45;
+ width:58px;height:58px;border-radius:999px;border:none;background:var(--degrade);color:#fff;
+ font-size:28px;line-height:1;box-shadow:var(--glow);cursor:pointer}
+.side-foot .nav{margin-bottom:10px}
+
+/* ---------- detalle plegable de una acción ---------- */
+.nota{margin-top:5px}
+.nota summary{cursor:pointer;font-size:11.5px;color:var(--cian);font-weight:600}
+.nota p{margin:6px 0 0;font-size:12px;color:var(--gris);line-height:1.5;max-width:52ch}
+
+/* ==========================================================
+   Bienvenida
+   ========================================================== */
+dialog.wide{max-width:560px}
+.wel-top{background:var(--degrade);color:#fff;padding:28px 28px 24px}
+.wel-top h2{margin:0;font-size:26px;font-weight:800;letter-spacing:-.02em}
+.wel-top h2 b{font-weight:900}
+.wel-sub{margin:8px 0 0;opacity:.94;font-size:13.5px;max-width:36ch}
+.wel-body{padding:22px 28px;display:grid;gap:16px}
+.wel-item{display:flex;gap:14px;align-items:flex-start}
+.wel-item>span{width:34px;height:34px;border-radius:10px;background:var(--celeste);color:var(--cian);
+ display:grid;place-items:center;flex:none;font-size:15px}
+.wel-item b{font-size:13.5px}
+.wel-item p{margin:2px 0 0;font-size:12.5px;color:var(--gris)}
+.wel-foot{padding:0 28px 26px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+
+/* ==========================================================
+   Visita guiada
+   ========================================================== */
+.spot{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(12,26,43,.62);z-index:100;
+ pointer-events:none;transition:all .28s cubic-bezier(.4,0,.2,1)}
+.tourbox{position:fixed;z-index:101;background:var(--surface);border-radius:var(--r);
+ padding:18px;box-shadow:var(--sh-lg);transition:all .28s cubic-bezier(.4,0,.2,1)}
+.tourbox .tb-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.tourbox .tb-h span{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--cian)}
+.tourbox .tb-h .linkbtn{margin:0;padding:0}
+.tourbox b{font-size:15px;display:block;margin-bottom:5px}
+.tourbox p{margin:0 0 14px;font-size:13px;color:var(--gris);line-height:1.5}
+.tourbox .tb-f{display:flex;justify-content:space-between;gap:10px;align-items:center}
+
+/* ---------- lista de ayuda ---------- */
+.hlist{margin:0;padding-left:18px;display:grid;gap:9px}
+.hlist li{font-size:13px;color:var(--gris);line-height:1.5}
+
+/* ==========================================================
+   CELULAR Y TABLET
+   ========================================================== */
+@media (max-width:860px){
+ .mtop{display:flex}
+ .desk{display:none!important}
+ .fab{display:grid;place-items:center}
+ .app{grid-template-columns:1fr}
+ .side{position:fixed;top:0;left:0;bottom:0;width:264px;z-index:50;height:100vh;
+  transform:translateX(-100%);transition:transform .26s cubic-bezier(.4,0,.2,1);overflow-y:auto;box-shadow:var(--sh-lg)}
+ body.menu-on .side{transform:none}
+ .main{padding:18px 16px calc(96px + env(safe-area-inset-bottom))}
+ .top{margin-bottom:18px;gap:12px}
+ .top h1{font-size:23px}
+ .top .acento{margin:8px 0 6px}
+ .top .sp{margin-left:0;width:100%}
+ .top .sp #periodo{flex:1}
+ .card{padding:18px;border-radius:14px}
+ .grid{gap:12px}
+ .g4{grid-template-columns:1fr 1fr}
+ .tile .val{font-size:24px}
+ .cat{grid-template-columns:1fr 1fr;gap:10px}
+ .pth{height:118px}
+ .pimg{max-height:96px}
+ .chead{gap:10px}
+ .chead .btn{width:100%}
+ .stage{flex-wrap:wrap;border-radius:12px}
+ .stage>div{flex:1 0 33%;border-bottom:2px solid var(--surface)}
+ body::before,body::after{display:none}
+ dialog{max-width:100%;width:100%;margin:auto 0 0;border-radius:22px 22px 0 0;max-height:92vh}
+ dialog.wide{max-width:100%}
+ .dlg-b{max-height:60vh;overflow-y:auto}
+ .wel-top{padding:24px 20px 20px}
+ .wel-top h2{font-size:22px}
+ .wel-body{padding:18px 20px}
+ .wel-foot{padding:0 20px 22px}
+ .wel-foot .btn{flex:1}
+ .dlg-h,.dlg-f{padding:16px 20px}
+ .dlg-b{padding:16px 20px}
+ .dlg-f .btn{flex:1}
+ .toast{bottom:88px}
+}
+
+@media (max-width:760px){
+ /* las tablas pasan a tarjetas */
+ .tw{max-height:none;overflow:visible}
+ table,tbody,tr,td{display:block;width:100%}
+ thead{display:none}
+ tr{border:1px solid var(--border);border-radius:14px;margin-bottom:10px;background:var(--surface);padding:4px 0}
+ tbody tr:hover{background:var(--surface)}
+ td{border:none;display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+  padding:8px 14px;text-align:right}
+ td::before{content:attr(data-l);font-size:10px;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--cian);font-weight:700;text-align:left;flex:none;padding-top:2px}
+ td[data-l=""]::before{display:none}
+ td.num{text-align:right}
+ .nota p{max-width:none}
+}
+
+@media (max-width:420px){
+ .g4{grid-template-columns:1fr}
+ .cat{grid-template-columns:1fr}
+ .pth{height:150px}
+ .f2,.dlg-b{grid-template-columns:1fr}
+ .fld.half{grid-column:span 2}
+ .stage>div{flex:1 0 50%}
+}
+
+/* pantallas muy anchas */
+@media (min-width:1600px){.main{max-width:1520px}}

@@ -41,12 +41,19 @@ const DB = {
   cargarLocal() {
     let d = null;
     try { d = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { d = null; }
-    if (!d) return;
+    if (!d) { this.sembrar(); return; }
     if (d.PROD && d.PROD.length) PROD = d.PROD;
     CUENTAS = d.CUENTAS || []; VENTAS = d.VENTAS || []; LOTES = d.LOTES || [];
     ACCIONES = d.ACCIONES || []; CONTACTOS = d.CONTACTOS || [];
     CFG_SHEET = d.CFG_SHEET || CFG_SHEET;
   },
+  /* primera vez: deja cargadas las acciones de marketing ya realizadas */
+  sembrar() {
+    if (typeof ACCIONES_SEMILLA === 'undefined' || ACCIONES.length) return;
+    ACCIONES = ACCIONES_SEMILLA.map((a, i) => ({ ...a, id: i + 1 }));
+    this.guardarLocal();
+  },
+
   guardarLocal() {
     if (this.modo === 'vivo') return;
     try {

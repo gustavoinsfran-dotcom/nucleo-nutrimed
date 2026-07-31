@@ -36,3 +36,23 @@ var TIPOS_ACCION=['Jornada','Académica','Institucional','Campo','Digital','Otra
 
 var P=id=>PROD.find(x=>x.id===id);
 var C=id=>CUENTAS.find(x=>x.id===id);
+
+/* ==========================================================
+   Acciones de marketing ya realizadas — datos reales del equipo.
+   Se cargan la primera vez que se abre el sistema y después se
+   pueden editar o completar desde la sección Acciones.
+   ========================================================== */
+var ACCIONES_SEMILLA=[
+ {n:'Sorteo 10 becas — Jornada Nutrición Clínica (Hospital Británico)',t:'Digital',f:'2026-07-24',
+  inv:60000,cont:359,cta:0,vta:0,est:'En curso',
+  nota:'Pauta IG desde @infinity.nutricion.ar, 24/07 al 02/08, $6.000/día. Audiencia Salud y Nutrición AMBA, radio 25 km desde el Hospital Británico, 18–55 años. Al 27/07: 23.015 visualizaciones, 13.337 de alcance, 403 visitas al perfil, +87 seguidores (la cuenta pasó de 54 a 141), 359 comentarios, 16 guardados, 13 compartidos.'},
+ {n:'Jornada de Nutrición Clínica — Hospital Británico',t:'Jornada',f:'2026-08-02',
+  inv:0,cont:0,cta:0,vta:0,est:'En curso',
+  nota:'Jornada para la que se sortearon las 10 becas. Completar asistentes y contactos generados al cierre.'},
+ {n:'Vademécum digital — descargas por DM',t:'Digital',f:'2026-07-24',
+  inv:0,cont:9,cta:0,vta:0,est:'Permanente',
+  nota:'Automatización ManyChat plan free: 9 DMs enviados, 5 clics al vademécum (CTR 56%). Límite de 25 contactos alcanzado el 25/07.'},
+ {n:'Outreach institucional por DM',t:'Institucional',f:'2026-07-24',
+  inv:0,cont:7,cta:0,vta:0,est:'En curso',
+  nota:'Cuentas contactadas: @entrenutris (respondieron), @nutricionresidenciacaba, @sancnutricion, @sanutricion, @escuelanutricionuba, @esp.nutricionclinica.uba, @colegionutricionistaspba. AALEN por canal institucional, no por DM frío.'}
+];
