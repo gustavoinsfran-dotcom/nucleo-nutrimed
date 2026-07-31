@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Sistema comercial y de marketing — línea de nutrición clínica, Argentina.">
+<title>NÚCLEO — Sistema Comercial Nutrimed</title>
+<link rel="icon" href="assets/favicon.svg">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<!-- ===== Login (solo aparece en modo vivo, sin sesión) ===== -->
+<div class="overlay hide" id="login">
+  <form class="card login-card" id="loginForm">
+    <div class="brand" style="padding-bottom:14px"><b>NÚCLEO</b><span>Nutrimed · Argentina</span></div>
+    <div><label>Email</label><input type="email" id="lEmail" required autocomplete="username"></div>
+    <div style="margin-top:12px"><label>Contraseña</label><input type="password" id="lPass" required autocomplete="current-password"></div>
+    <p class="err" id="loginErr"></p>
+    <button class="btn pri" id="loginBtn" style="width:100%;margin-top:14px">Entrar</button>
+    <p class="hint" style="margin-top:12px">Acceso solo para el equipo. Si no podés entrar, escribile a Gustavo.</p>
+  </form>
+</div>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand"><b>NÚCLEO</b><span>Infinity Nutrición</span></div>
+    <button class="nav on" data-v="panel"><span class="ic">◧</span>Panel</button>
+    <button class="nav" data-v="ventas"><span class="ic">▤</span>Ventas</button>
+    <button class="nav" data-v="cuentas"><span class="ic">◎</span>Cuentas</button>
+    <button class="nav" data-v="stock"><span class="ic">▦</span>Stock<span class="pill" id="pillStock">0</span></button>
+    <button class="nav" data-v="acciones"><span class="ic">◈</span>Acciones</button>
+    <button class="nav" data-v="base"><span class="ic">☰</span>Base de datos</button>
+    <button class="nav" data-v="reportes"><span class="ic">↧</span>Reportes</button>
+    <div class="side-foot">
+      <div class="aval"><span>Una línea de</span><img src="assets/logo-infinity.png" alt="Infinity Pharma"></div>
+      <div class="modo" id="modo"><span class="dot"></span>Modo demo</div>
+      <button class="linkbtn hide" id="logout">Cerrar sesión</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="top">
+      <div>
+        <p class="kicker" id="vKicker">Nutrición clínica</p>
+        <h1 id="vTitle">Panel</h1>
+        <div class="acento"></div>
+        <p id="vSub">Vista general de la línea</p>
+      </div>
+      <div class="sp">
+        <select class="btn" id="periodo"></select>
+        <button class="btn pri" id="newSale">+ Cargar venta</button>
+      </div>
+    </div>
+    <div id="views"></div>
+  </main>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<dialog id="dlgSale">
+  <form method="dialog">
+    <div class="dlg-h"><b>Cargar venta</b></div>
+    <div class="dlg-b">
+      <div><label>Cuenta</label><select id="fCuenta"></select></div>
+      <div><label>Producto</label><select id="fProd"></select></div>
+      <div class="f2">
+        <div><label>Unidades</label><input type="number" id="fUnid" value="6" min="1"></div>
+        <div><label>Precio unitario</label><input type="number" id="fPrecio" value="0"></div>
+      </div>
+      <div class="f2">
+        <div><label>Fecha</label><input type="date" id="fFecha"></div>
+        <div><label>Origen</label><select id="fOrigen">
+          <option>Visita en campo</option><option>Recompra</option><option>Acción de marketing</option><option>Inbound institucional</option><option>Licitación</option>
+        </select></div>
+      </div>
+      <p class="hint">Al guardar se descuenta stock del lote más próximo a vencer (FEFO) y se actualizan panel, cuenta y reporte del mes.</p>
+    </div>
+    <div class="dlg-f">
+      <button class="btn" value="cancel">Cancelar</button>
+      <button class="btn pri" value="ok" id="saveSale">Guardar venta</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/demo-data.js"></script>
+<script src="assets/db.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
