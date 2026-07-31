@@ -2,10 +2,12 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#17C26E">
 <meta name="description" content="Sistema comercial y de marketing — línea de nutrición clínica Bi¹.">
 <title>NÚCLEO — Sistema Comercial · Infinity Nutrición</title>
 <link rel="icon" href="assets/favicon.svg">
+<link rel="apple-touch-icon" href="assets/favicon.svg">
 <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
@@ -22,8 +24,16 @@
   </form>
 </div>
 
+<!-- Barra superior: solo en celular -->
+<header class="mtop">
+  <button class="icobtn" id="burger" aria-label="Menú">☰</button>
+  <div class="brand mini-brand"><b>NÚCLEO</b><span>Infinity Nutrición</span></div>
+  <button class="icobtn js-ayuda" aria-label="Ayuda">?</button>
+</header>
+<div class="backdrop" id="backdrop"></div>
+
 <div class="app">
-  <aside class="side">
+  <aside class="side" id="side">
     <div class="brand"><b>NÚCLEO</b><span>Infinity Nutrición</span></div>
     <button class="nav on" data-v="panel"><span class="ic">◧</span>Panel</button>
     <button class="nav" data-v="ventas"><span class="ic">▤</span>Ventas</button>
@@ -34,6 +44,7 @@
     <button class="nav" data-v="base"><span class="ic">☰</span>Base de datos</button>
     <button class="nav" data-v="reportes"><span class="ic">↧</span>Reportes</button>
     <div class="side-foot">
+      <button class="nav js-ayuda"><span class="ic">?</span>Ayuda y visita guiada</button>
       <div class="aval"><span>Una línea de</span><img src="assets/logo-infinity.png" alt="Infinity Pharma"></div>
       <div class="modo" id="modo"><span class="dot"></span>Solo en este equipo</div>
       <button class="linkbtn hide" id="logout">Cerrar sesión</button>
@@ -49,13 +60,17 @@
         <p id="vSub">Vista general de la línea</p>
       </div>
       <div class="sp">
-        <select class="btn" id="periodo"></select>
-        <button class="btn pri" id="newSale">+ Cargar venta</button>
+        <select class="btn" id="periodo" aria-label="Mes"></select>
+        <button class="btn icobtn js-ayuda desk" aria-label="Ayuda">?</button>
+        <button class="btn pri js-venta desk">+ Cargar venta</button>
       </div>
     </div>
     <div id="views"></div>
   </main>
 </div>
+
+<!-- Botón flotante: solo en celular -->
+<button class="fab js-venta" aria-label="Cargar venta">+</button>
 
 <div class="tip" id="tip"></div>
 <dialog id="dlg"></dialog>
@@ -66,6 +81,7 @@
 <script src="assets/data.js"></script>
 <script src="assets/sheets.js"></script>
 <script src="assets/store.js"></script>
+<script src="assets/ux.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
