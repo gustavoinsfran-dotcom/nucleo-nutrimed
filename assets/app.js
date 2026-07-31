@@ -482,14 +482,22 @@ function importarCSV(file){
    iI=SHEET.col(h,['institu','hospital','empresa']),iM=SHEET.col(h,['mail','correo']),
    iT=SHEET.col(h,['tel','cel','whats']),iO=SHEET.col(h,['origen','fuente','accion']);
   if(iN<0)return toast('No encontré la columna Nombre.','err');
-  let n=0;
+  let n=0,nuevasCtas=0;
   for(const r of filas.slice(1)){
    const nom=String(r[iN]||'').trim(); if(!nom)continue;
-   await DB.addContacto({n:nom,r:iR>=0?r[iR]:'',i:iI>=0?r[iI]:'',mail:iM>=0?r[iM]:'',
-    tel:iT>=0?r[iT]:'',o:iO>=0?r[iO]:'Importado',f:hoy(),cta:null,cons:false});
+   const inst=(iI>=0?String(r[iI]||'').trim():'');
+   let ctaId=null;
+   if(inst){
+    let c=CUENTAS.find(x=>SHEET.norm(x.n)===SHEET.norm(inst));
+    if(!c){c=await DB.addCuenta({n:inst,t:'Institución',z:'',ref:nom,tel:iT>=0?r[iT]:'',
+      mail:iM>=0?r[iM]:'',e:'Contactada',notas:'Alta automática al importar contactos.',desde:''});nuevasCtas++;}
+    ctaId=c.id;
+   }
+   await DB.addContacto({n:nom,r:iR>=0?r[iR]:'',i:inst,mail:iM>=0?r[iM]:'',
+    tel:iT>=0?r[iT]:'',o:iO>=0?r[iO]:'Importado',f:hoy(),cta:ctaId,cons:false});
    n++;
   }
-  toast(`${n} contactos importados.`,'ok');render();
+  toast(`${n} contactos importados${nuevasCtas?` · ${nuevasCtas} cuentas nuevas`:''}.`,'ok');render();
  };
  fr.readAsText(file,'utf-8');
 }

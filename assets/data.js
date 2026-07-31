@@ -43,12 +43,12 @@ var C=id=>CUENTAS.find(x=>x.id===id);
    pueden editar o completar desde la sección Acciones.
    ========================================================== */
 var ACCIONES_SEMILLA=[
- {n:'Sorteo 10 becas — Jornada Nutrición Clínica (Hospital Británico)',t:'Digital',f:'2026-07-24',
+ {n:'Sorteo de becas — Jornada Nutrición Clínica (Hospital Británico)',t:'Digital',f:'2026-07-24',
   inv:60000,cont:359,cta:0,vta:0,est:'En curso',
   nota:'Pauta IG desde @infinity.nutricion.ar, 24/07 al 02/08, $6.000/día. Audiencia Salud y Nutrición AMBA, radio 25 km desde el Hospital Británico, 18–55 años. Al 27/07: 23.015 visualizaciones, 13.337 de alcance, 403 visitas al perfil, +87 seguidores (la cuenta pasó de 54 a 141), 359 comentarios, 16 guardados, 13 compartidos.'},
- {n:'Jornada de Nutrición Clínica — Hospital Británico',t:'Jornada',f:'2026-08-02',
-  inv:0,cont:0,cta:0,vta:0,est:'En curso',
-  nota:'Jornada para la que se sortearon las 10 becas. Completar asistentes y contactos generados al cierre.'},
+ {n:'Jornada de Nutrición Clínica — Hospital Británico',t:'Jornada',f:'2026-08-07',
+  inv:0,cont:10,cta:0,vta:0,est:'En curso',
+  nota:'30 becas en total: 10 del cupo "Los elegidos" (confirmadas, profesionales de instituciones), 10 del cupo Acción IG y 10 de Universidades y estudiantes. Al 31/07 hay 10 confirmadas y 20 disponibles. Los contactos con sus datos personales se importan por CSV desde Base de datos: no viajan en el código del sitio.'},
  {n:'Vademécum digital — descargas por DM',t:'Digital',f:'2026-07-24',
   inv:0,cont:9,cta:0,vta:0,est:'Permanente',
   nota:'Automatización ManyChat plan free: 9 DMs enviados, 5 clics al vademécum (CTR 56%). Límite de 25 contactos alcanzado el 25/07.'},

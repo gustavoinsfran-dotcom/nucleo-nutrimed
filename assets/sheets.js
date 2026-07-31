@@ -27,6 +27,10 @@ const SHEET = {
 
   /* CSV con comillas y saltos de línea dentro de celdas */
   parseCSV(txt) {
+    txt = txt.replace(/^﻿/, '');
+    /* separador: coma o punto y coma, el que más aparezca en la primera línea */
+    const l1 = txt.split('\n')[0] || '';
+    const sep = (l1.split(';').length > l1.split(',').length) ? ';' : ',';
     const filas = []; let f = [], c = '', q = false;
     for (let i = 0; i < txt.length; i++) {
       const ch = txt[i];
@@ -35,7 +39,7 @@ const SHEET = {
         else if (ch === '"') q = false;
         else c += ch;
       } else if (ch === '"') q = true;
-      else if (ch === ',') { f.push(c); c = ''; }
+      else if (ch === sep) { f.push(c); c = ''; }
       else if (ch === '\n') { f.push(c); filas.push(f); f = []; c = ''; }
       else if (ch !== '\r') c += ch;
     }
