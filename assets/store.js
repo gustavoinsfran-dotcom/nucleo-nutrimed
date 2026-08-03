@@ -46,6 +46,7 @@ const DB = {
     CUENTAS = d.CUENTAS || []; VENTAS = d.VENTAS || []; LOTES = d.LOTES || [];
     ACCIONES = d.ACCIONES || []; CONTACTOS = d.CONTACTOS || [];
     CFG_SHEET = d.CFG_SHEET || CFG_SHEET;
+    if (d.CFG_TIENDA) CFG_TIENDA = d.CFG_TIENDA;
   },
   /* primera vez: deja cargadas las acciones de marketing ya realizadas */
   sembrar() {
@@ -57,7 +58,7 @@ const DB = {
   guardarLocal() {
     if (this.modo === 'vivo') return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ PROD, CUENTAS, VENTAS, LOTES, ACCIONES, CONTACTOS, CFG_SHEET }));
+      localStorage.setItem(KEY, JSON.stringify({ PROD, CUENTAS, VENTAS, LOTES, ACCIONES, CONTACTOS, CFG_SHEET, CFG_TIENDA }));
     } catch (e) { console.warn('No se pudo guardar en el navegador', e); }
   },
 
@@ -148,7 +149,7 @@ const DB = {
     if (this.modo === 'vivo') {
       const { error } = await this.sb.from('venta').insert({
         fecha: v.f, cuenta_id: v.c, sku: v.p, unidades: v.u,
-        precio_unitario: v.pu, origen: v.o, cargado_por: this.user?.email || null });
+        precio_unitario: v.pu, origen: v.o, pedido: v.ped || null, cargado_por: this.user?.email || null });
       if (error) throw error;
       for (const l of tocados) await this.sb.from('lote').update({ unidades: l.u }).eq('sku', l.p).eq('lote', l.l);
     }
@@ -177,13 +178,14 @@ const DB = {
   },
 
   /* ---------- respaldo ---------- */
-  exportar() { return JSON.stringify({ PROD, CUENTAS, VENTAS, LOTES, ACCIONES, CONTACTOS, CFG_SHEET }, null, 2); },
+  exportar() { return JSON.stringify({ PROD, CUENTAS, VENTAS, LOTES, ACCIONES, CONTACTOS, CFG_SHEET, CFG_TIENDA }, null, 2); },
   importar(txt) {
     const d = JSON.parse(txt);
     if (d.PROD) PROD = d.PROD;
     CUENTAS = d.CUENTAS || []; VENTAS = d.VENTAS || []; LOTES = d.LOTES || [];
     ACCIONES = d.ACCIONES || []; CONTACTOS = d.CONTACTOS || [];
     CFG_SHEET = d.CFG_SHEET || CFG_SHEET;
+    if (d.CFG_TIENDA) CFG_TIENDA = d.CFG_TIENDA;
     this.guardarLocal();
   }
 };

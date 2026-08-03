@@ -138,3 +138,72 @@ const SHEET = {
     return { lotes: lotes.length, unidades: lotes.reduce((a, l) => a + l.u, 0), sinReconocer: [...new Set(sinReconocer)] };
   }
 };
+
+/* ==========================================================
+   Tienda online (Tienda Nube) — pedidos hacia NÚCLEO
+   Los pedidos se leen de una hoja de Google que actualiza la tienda.
+   Cada pedido entra como venta del canal Ecommerce, con Logevity
+   como cuenta: es el eslabón de la cadena de comercialización.
+   ========================================================== */
+var CFG_TIENDA = { url:'', hoja:'', ultima:'', auto:true, cuenta:'Logevity' };
+
+const TIENDA = {
+  async sincronizar(){
+    if(!CFG_TIENDA.url) throw new Error('Falta el enlace de la hoja de pedidos.');
+    const e = SHEET.endpoint(CFG_TIENDA.url, CFG_TIENDA.hoja);
+    if(!e) throw new Error('El enlace no parece de Google Sheets.');
+    let txt;
+    try{
+      const r = await fetch(e);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      txt = await r.text();
+    }catch(err){
+      throw new Error('No se pudo leer la hoja de pedidos. Revisá que esté compartida como "Cualquiera con el enlace · Lector".');
+    }
+    if(/^\s*<|<!DOCTYPE/i.test(txt)) throw new Error('La hoja no es pública. Compartila como "Cualquiera con el enlace · Lector".');
+
+    const filas = SHEET.parseCSV(txt);
+    if(filas.length < 2) throw new Error('La hoja no tiene pedidos.');
+    const head = filas[0];
+    const iNro  = SHEET.col(head,['pedido','orden','order','n°','nro','numero']);
+    const iFec  = SHEET.col(head,['fecha','creado','date']);
+    const iSku  = SHEET.col(head,['sku','codigo','cod.']);
+    const iNom  = SHEET.col(head,['producto','articulo','artículo','detalle','nombre']);
+    const iCant = SHEET.col(head,['cantidad','unidad','cant','qty']);
+    const iPre  = SHEET.col(head,['precio','unitario','importe','total','subtotal']);
+    const iEst  = SHEET.col(head,['estado','status','pago']);
+
+    if(iCant < 0) throw new Error('No encontré la columna de cantidad.');
+    if(iSku < 0 && iNom < 0) throw new Error('No encontré la columna de producto.');
+    if(iFec < 0) throw new Error('No encontré la columna de fecha.');
+
+    /* la cuenta del canal se crea una sola vez */
+    let cta = CUENTAS.find(c => SHEET.norm(c.n) === SHEET.norm(CFG_TIENDA.cuenta));
+    if(!cta) cta = await DB.addCuenta({n:CFG_TIENDA.cuenta, t:'Distribuidor', z:'Nacional',
+      ref:'Tienda online', tel:'', mail:'', e:'Activa',
+      notas:'Eslabón de la cadena de comercialización para la venta online. Las ventas de la tienda se registran acá.',
+      desde:''});
+
+    const yaCargados = new Set(VENTAS.filter(v => v.ped).map(v => v.ped + '|' + v.p));
+    let nuevos = 0, sinReconocer = [];
+    for(const r of filas.slice(1)){
+      const p = SHEET.producto(iSku>=0?r[iSku]:'', iNom>=0?r[iNom]:'');
+      if(!p){ const et=(iNom>=0?r[iNom]:r[iSku]||'').trim(); if(et) sinReconocer.push(et); continue; }
+      const u = parseInt(String(r[iCant]).replace(/[^\d-]/g,''),10);
+      if(!isFinite(u) || u <= 0) continue;
+      const f = SHEET.fecha(r[iFec]); if(!f) continue;
+      const est = iEst>=0 ? String(r[iEst]).toLowerCase() : '';
+      if(/cancel|anul|rechaz/.test(est)) continue;
+      const nro = iNro>=0 ? String(r[iNro]).trim() : f+'-'+p.id;
+      if(yaCargados.has(nro+'|'+p.id)) continue;
+      let pu = iPre>=0 ? parseFloat(String(r[iPre]).replace(/[^\d,.-]/g,'').replace(/\.(?=\d{3})/g,'').replace(',','.')) : NaN;
+      if(!isFinite(pu) || pu <= 0) pu = p.p || 0;
+      if(iPre>=0 && /total|importe|subtotal/.test(SHEET.norm(head[iPre])) && u>1) pu = pu/u;
+      await DB.addVenta({f, m:+f.split('-')[1]-1, c:cta.id, p:p.id, u, pu, o:'Ecommerce', ped:nro});
+      nuevos++;
+    }
+    CFG_TIENDA.ultima = new Date().toISOString();
+    DB.guardarLocal();
+    return { nuevos, sinReconocer:[...new Set(sinReconocer)], cuenta:cta.n };
+  }
+};

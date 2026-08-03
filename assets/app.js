@@ -12,12 +12,15 @@ const ventasMes=m=>VENTAS.filter(v=>v.m===m);
 const fact=a=>a.reduce((x,v)=>x+v.u*v.pu,0);
 const unid=a=>a.reduce((x,v)=>x+v.u,0);
 const serieFact=()=>MESES.map((_,i)=>fact(ventasMes(i)));
+const hastaMes=()=>Math.max(MES,...VENTAS.map(v=>v.m),0);
 const serieCat=c=>MESES.map((_,i)=>fact(ventasMes(i).filter(v=>P(v.p)&&P(v.p).cat===c)));
 const stockDe=id=>LOTES.filter(l=>l.p===id).reduce((a,l)=>a+l.u,0);
 const diasA=f=>Math.round((new Date(f+'T12:00:00')-new Date())/864e5);
 const nivelVto=d=>d<0?['crit','Vencido']:d<=60?['crit','Crítico']:d<=90?['ser','Urgente']:d<=180?['warn','Vigilar']:['good','OK'];
 const CATC={'SNO':'var(--s1)','Sonda':'var(--s2)','Módulos':'var(--s3)'};
 const MIN_STOCK=50;
+const esOnline=v=>v.o==='Ecommerce';
+const ventasCanal=(m,online)=>ventasMes(m).filter(v=>esOnline(v)===online);
 const vendidoUlt3=id=>{const m=[MES,MES-1,MES-2].filter(x=>x>=0);
  return VENTAS.filter(v=>v.p===id&&m.includes(v.m)).reduce((a,v)=>a+v.u,0)/Math.max(1,m.length);};
 
@@ -180,7 +183,7 @@ function nuevaAccion(){
 function nuevoLote(){
  if(!PROD.length)return;
  modal({titulo:'Cargar lote a mano',ok:'Guardar',campos:[
-  {k:'p',l:'Producto',t:'select',opts:PROD.map(p=>({v:p.id,t:p.n+' — '+p.pres})),req:true},
+  {k:'p',l:'Producto',t:'select',opts:PROD.map(p=>({v:p.id,t:p.n+' · '+p.pres})),req:true},
   {k:'l',l:'Número de lote',req:true,half:true},
   {k:'u',l:'Unidades',t:'number',val:0,req:true,half:true},
   {k:'v',l:'Vencimiento',t:'date',req:true,half:true}],
@@ -188,7 +191,7 @@ function nuevoLote(){
 }
 function nuevaVenta(){
  if(!CUENTAS.length){toast('Primero cargá al menos una cuenta.','err');return nuevaCuenta();}
- const prods=PROD.map(p=>({v:p.id,t:p.n+' — '+p.pres}));
+ const prods=PROD.map(p=>({v:p.id,t:p.n+' · '+p.pres}));
  modal({titulo:'Cargar venta',ok:'Guardar venta',campos:[
   {k:'c',l:'Cuenta',t:'select',opts:CUENTAS.map(c=>({v:c.id,t:c.n})),req:true},
   {k:'p',l:'Producto',t:'select',opts:prods,req:true},
@@ -228,6 +231,28 @@ async function sincronizar(){
  }catch(e){toast(e.message,'err');}
 }
 
+
+function configTienda(){
+ modal({titulo:'Conectar la tienda online',ok:'Guardar y traer pedidos',ancho:'580px',campos:[
+  {k:'url',l:'Enlace de la hoja de pedidos',val:CFG_TIENDA.url,ph:'https://docs.google.com/spreadsheets/d/…',
+   hint:'La hoja la alimenta Tienda Nube. Compartila como "Cualquiera con el enlace · Lector".'},
+  {k:'hoja',l:'Nombre de la hoja',val:CFG_TIENDA.hoja,ph:'Pedidos',hint:'Vacío si es la primera hoja.'},
+  {k:'cuenta',l:'Cuenta que factura la venta online',val:CFG_TIENDA.cuenta,req:true,
+   hint:'El eslabón de la cadena de comercialización. Cada pedido se registra como venta a esta cuenta.'},
+  {k:'auto',l:'',t:'check',val:CFG_TIENDA.auto,ph:'Traer pedidos automáticamente al abrir el sitio'}],
+  onOk:async v=>{Object.assign(CFG_TIENDA,v);DB.guardarLocal();await sincronizarTienda();}});
+}
+async function sincronizarTienda(){
+ if(!CFG_TIENDA.url){configTienda();return;}
+ toast('Leyendo pedidos de la tienda…');
+ try{
+  const r=await TIENDA.sincronizar();
+  toast(r.nuevos?`${r.nuevos} pedido(s) nuevo(s) cargados a ${r.cuenta}.`:'Sin pedidos nuevos.','ok');
+  if(r.sinReconocer.length)toast('No reconocí: '+r.sinReconocer.slice(0,3).join(' · '),'err');
+  render();
+ }catch(e){toast(e.message,'err');}
+}
+
 /* ============ VISTAS ============ */
 const V={};
 
@@ -255,7 +280,7 @@ V.panel=()=>{
  </div>
  <div class="grid g23" style="margin-bottom:16px">
   <div class="card"><h3>Evolución de facturación</h3><p class="sub">${AÑO} · pasá el mouse por el gráfico</p>
-   <div id="lcw">${VENTAS.length?lineChart(serieFact(),MESES):vacio('Todavía no hay ventas cargadas.',{t:'+ Cargar la primera venta',fn:'nuevaVenta()'})}</div></div>
+   <div id="lcw">${VENTAS.length?lineChart(serieFact().slice(0,hastaMes()+1),MESES.slice(0,hastaMes()+1)):vacio('Todavía no hay ventas cargadas.',{t:'+ Cargar la primera venta',fn:'nuevaVenta()'})}</div></div>
   <div class="card"><h3>Estado de la cartera</h3><p class="sub">${CUENTAS.length} cuenta${CUENTAS.length===1?'':'s'} en seguimiento</p>
    ${CUENTAS.length?barsH(ESTADOS.map(e=>({n:e,v:CUENTAS.filter(c=>c.e===e).length,t:CUENTAS.filter(c=>c.e===e).length+''})).filter(r=>r.v),'var(--s1)'):
     vacio('Sin cuentas cargadas.',{t:'+ Nueva institución',fn:'nuevaCuenta()'})}</div>
@@ -272,6 +297,14 @@ V.panel=()=>{
     return `<div class="alert a-${n}"><span class="ic">${n==='crit'?'⛔':n==='ser'?'⚠':'◔'}</span><div>
      <b>${esc(P(a.l.p)?.n||a.l.p)}</b><p>Lote ${esc(a.l.l)} · ${a.l.u} u. · vence ${fmtF(a.l.v)} — <b>${a.d} días</b> · ${t}</p></div></div>`}).join('')
     :vacio('Sin stock cargado. Conectá la planilla de logística y aparece solo.',{t:'Conectar planilla',fn:'configSheet()'})}</div>
+  <div class="card"><h3>Canales</h3><p class="sub">De dónde viene la facturación de ${MESES[MES]}</p>
+   ${(()=>{const ins=fact(ventasCanal(MES,false)),onl=fact(ventasCanal(MES,true));
+    if(!ins&&!onl)return vacio('Sin ventas en el mes.');
+    return barsH([{n:'Institucional y farmacias',v:ins,t:money(ins)},{n:'Tienda online',v:onl,t:money(onl)}],'var(--s1)')
+     +`<p class="src">${onl?`La tienda representa el ${(onl/(ins+onl)*100).toFixed(0)}% del mes.`:'La tienda todavía no registró pedidos.'}</p>`;})()}
+  </div>
+ </div>
+ <div class="grid g2" style="margin-top:16px">
   <div class="card"><h3>Marketing → venta</h3><p class="sub">Acciones y lo que generaron</p>
    ${ACCIONES.length?ACCIONES.slice(0,5).map(a=>`<div class="rowline">
      <div><b>${esc(a.n)}</b><div class="mini">${a.cont} contactos · ${a.cta} cuentas abiertas</div></div>
@@ -344,20 +377,64 @@ V.catalogo=()=>{
   <div class="chead"><div><h3>Catálogo — línea Bi¹</h3>
    <p class="sub">${PROD.length} productos · ${PROD.length-sinPrecio} con precio cargado</p></div></div>
   ${sinPrecio?`<div class="demo">Faltan precios en ${sinPrecio} productos. Tocá cualquiera para cargarlo: el precio se usa como valor por defecto al cargar una venta.</div>`:''}
-  <div class="cat">${PROD.map(p=>{
-   const st=stockDe(p.id),rot=vendidoUlt3(p.id);
-   const cob=rot?st/rot:null;
-   return `<div class="pcard" onclick="editarPrecio('${p.id}')">
-    <div class="pth">${imgProd(p)}</div>
-    <div class="pbody">
-     <span class="ptag" style="color:${CATC[p.cat]}">${p.cat==='SNO'?'Enteral oral':p.cat==='Sonda'?'Enteral sonda':'Módulo'}</span>
-     <b>${esc(p.n)}</b>
-     <div class="mini">${esc(p.pres)} · ${p.id}</div>
-     <div class="prow"><span>${p.p?money(p.p):'<i class="falta">sin precio</i>'}</span>
-      <span class="mini">${st?st+' u.':'sin stock'}${cob!==null?` · ${cob.toFixed(1)} meses`:''}</span></div>
-    </div></div>`}).join('')}</div>
-  <p class="src">Las fotos van en <code>assets/productos/</code> con el nombre del SKU (por ejemplo <code>SNO-ONCO-300.png</code>). Mientras no estén, se muestra el ícono de la categoría.</p>
+  ${[...new Set(PROD.map(p=>p.sub))].map(sub=>`
+   <p class="catsub">${esc(sub)}</p>
+   <div class="cat">${PROD.filter(p=>p.sub===sub).map(p=>{
+    const st=stockDe(p.id),rot=vendidoUlt3(p.id);
+    const cob=rot?st/rot:null;
+    return `<div class="pcard" onclick="editarPrecio('${p.id}')" title="Tocá para cargar el precio">
+     <div class="pth">${imgProd(p)}</div>
+     <div class="pbody">
+      <b>${esc(p.n)}</b>
+      <span class="pdesc">${esc(p.d||'')}</span>
+      <div class="mini">${esc(p.pres)}</div>
+      <div class="prow"><span>${p.p?money(p.p):'<i class="falta">sin precio</i>'}</span>
+       <span class="mini">${st?st+' u.':'sin stock'}${cob!==null?` · ${cob.toFixed(1)} m`:''}</span></div>
+     </div></div>`}).join('')}</div>`).join('')}
+  <p class="src">Las fotos van en <code>assets/productos/</code> con el nombre del SKU (por ejemplo <code>SNO-ONCO-300.png</code>). Los ocho orales ya tienen la suya, tomada del vademécum; el resto muestra el ícono de la categoría hasta que lleguen los packshots.</p>
  </div>`;
+};
+
+V.tienda=()=>{
+ const vm=ventasMes(MES).filter(esOnline);
+ const ult=CFG_TIENDA.ultima?new Date(CFG_TIENDA.ultima):null;
+ const f=fact(vm),u=unid(vm);
+ const pedidos=new Set(vm.map(v=>v.ped||v.f)).size;
+ const top=Object.values(vm.reduce((a,v)=>{(a[v.p]=a[v.p]||{n:P(v.p)?.n||v.p,v:0});a[v.p].v+=v.u*v.pu;return a;},{}))
+  .sort((a,b)=>b.v-a.v).slice(0,6).map(r=>({n:r.n,v:r.v,t:money(r.v)}));
+ const serie=MESES.slice(0,hastaMes()+1).map((_,i)=>fact(ventasCanal(i,true)));
+ return `<div class="card sync" style="margin-bottom:16px">
+  <div class="chead"><div><h3>Tienda online</h3>
+   <p class="sub">${CFG_TIENDA.url?`Conectada${ult?' · última lectura '+ult.toLocaleString('es-AR'):''}`:'Sin conectar. Los pedidos entran desde una hoja que actualiza la tienda.'}</p></div>
+   <div style="display:flex;gap:8px">
+    <button class="btn" onclick="configTienda()">${CFG_TIENDA.url?'Cambiar enlace':'Conectar tienda'}</button>
+    ${CFG_TIENDA.url?'<button class="btn pri" onclick="sincronizarTienda()">↻ Traer pedidos</button>':''}</div></div>
+  <div class="cadena">
+   <span>Infinity Pharma</span><i>→</i><span>${esc(CFG_TIENDA.cuenta)}</span><i>→</i><span>Paciente</span>
+   <p>Cada pedido se registra como venta a ${esc(CFG_TIENDA.cuenta)}, el eslabón de la cadena de comercialización. El paciente queda como dato de envío, no como cliente facturado.</p></div>
+ </div>
+ ${vm.length?`
+ <div class="grid g4" style="margin-bottom:16px">
+  <div class="card tile"><div class="lbl">Facturación online ${MESES[MES]}</div><div class="val">${money(f)}</div><div class="dlt">${pedidos} pedido${pedidos===1?'':'s'}</div></div>
+  <div class="card tile"><div class="lbl">Unidades</div><div class="val">${u}</div><div class="dlt">ticket ${money(f/Math.max(1,pedidos))}</div></div>
+  <div class="card tile"><div class="lbl">Participación del canal</div><div class="val">${(f/Math.max(1,fact(ventasMes(MES)))*100).toFixed(0)}%</div><div class="dlt">del total facturado del mes</div></div>
+  <div class="card tile"><div class="lbl">Productos distintos</div><div class="val">${new Set(vm.map(v=>v.p)).size}</div><div class="dlt">de ${PROD.length} del catálogo</div></div>
+ </div>
+ <div class="grid g23" style="margin-bottom:16px">
+  <div class="card"><h3>Evolución del canal online</h3><p class="sub">${AÑO}</p>
+   <div id="lct">${lineChart(serie,MESES.slice(0,hastaMes()+1))}</div></div>
+  <div class="card"><h3>Lo que más se vende online</h3><p class="sub">Por facturación · ${MESES[MES]}</p>${barsH(top,'var(--s3)')}
+   <p class="src">Sirve para decidir qué reponer en la tienda y qué producto empujar con contenido.</p></div>
+ </div>
+ <div class="card"><h3>Pedidos de ${MESES[MES]}</h3><p class="sub">${vm.length} líneas · ${money(f)}</p>
+ ${tbl([{t:'Pedido'},{t:'Fecha'},{t:'Producto'},{t:'Unid.',n:1},{t:'Total',n:1}],
+  vm.slice().sort((a,b)=>b.f.localeCompare(a.f)).map(v=>[
+   `<b>${esc(v.ped||'—')}</b>`,fmtF(v.f),
+   `${esc(P(v.p)?.n||v.p)}<div class="mini">${esc(P(v.p)?.pres||'')}</div>`,
+   v.u,money(v.u*v.pu)]))}
+ <p class="src">Los pedidos descuentan stock igual que una venta institucional: es el mismo depósito.</p></div>`
+ :vacio('Todavía no entraron pedidos. Cuando la tienda esté publicada, se conectan acá y aparecen solos.',
+   CFG_TIENDA.url?null:{t:'Conectar tienda',fn:'configTienda()'})}`;
 };
 
 V.stock=()=>{
@@ -508,6 +585,7 @@ const TIT={panel:['Panel <em>comercial</em>','Vista general de la línea'],
  cuentas:['Cartera de <em>cuentas</em>','Embudo comercial e instituciones'],
  catalogo:['<em>Catálogo</em> de productos','Línea Bi¹ · precios y stock'],
  stock:['Stock y <em>vencimientos</em>','Sincronizado con logística'],
+ tienda:['Tienda <em>online</em>','Canal ecommerce y su trazabilidad'],
  acciones:['Acciones de <em>marketing</em>','Trazabilidad hacia la venta'],
  base:['Base de <em>datos</em>','Contactos unificados por origen'],
  reportes:['<em>Reportes</em>','Exportación mensual']};
@@ -521,7 +599,7 @@ function render(){
  $('#vSub').textContent=`${MESES[MES]} ${AÑO} · ${TIT[VISTA][1]}`;
  if(VISTA==='panel'&&VENTAS.length){
   const vals=serieFact();
-  bindLine($('#lcw'),MESES,i=>{const vm=ventasMes(i);
+  bindLine($('#lcw'),MESES.slice(0,hastaMes()+1),i=>{const vm=ventasMes(i);
    return `<div class="row"><span>Facturación</span><b>${money(vals[i])}</b></div>
     <div class="row"><span>Unidades</span><b>${unid(vm)}</b></div>
     <div class="row"><span>Operaciones</span><b>${vm.length}</b></div>`;});
