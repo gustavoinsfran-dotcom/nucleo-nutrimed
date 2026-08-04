@@ -182,7 +182,7 @@ const XLS = {
       throw new Error('No reconozco el archivo. Esperaba las columnas Cliente, Cod Prod, Producto y Cantidad.');
 
     const yaCargadas = new Set(VENTAS.filter(v => v.cmp).map(v => v.cmp + '|' + v.p + '|' + (v.lote || '')));
-    let nuevas = 0, notas = 0, cuentasNuevas = 0, prodNuevos = 0;
+    let nuevas = 0, notas = 0, cuentasNuevas = 0, prodNuevos = 0, valorizados = 0;
     const antesP = PROD.length;
 
     for (const f of filas) {
@@ -196,13 +196,6 @@ const XLS = {
       const cmp = iCmp >= 0 && f[iCmp] ? String(f[iCmp]).trim() : fec + '-' + p.id;
       const lote = iLot >= 0 && f[iLot] ? String(f[iLot]).trim() : '';
       const clave = cmp + '|' + p.id + '|' + lote;
-      if (yaCargadas.has(clave)) continue;
-      yaCargadas.add(clave);
-
-      /* nota de crédito o devolución → resta */
-      const tc = iTC >= 0 ? this.norm(f[iTC]) : '';
-      const signo = /credito|crédito|devol/.test(tc) ? -1 : 1;
-      if (signo < 0) notas++;
 
       /* precio unitario: el de venta o el total dividido por cantidad */
       let pu = iPre >= 0 ? this.num(f[iPre]) : NaN;
@@ -210,6 +203,28 @@ const XLS = {
         const t = iTot >= 0 ? this.num(f[iTot]) : NaN;
         pu = isFinite(t) && u ? Math.abs(t / u) : (p.p || 0);
       }
+
+      /* el archivo trae el costo y el precio: así el stock queda valorizado.
+         Se aplica siempre, aun si la venta ya estaba cargada: sirve para refrescar
+         valores volviendo a subir el mismo archivo. */
+      const costo = iCos >= 0 ? this.num(f[iCos]) : NaN;
+      const repo  = iRep >= 0 ? this.num(f[iRep]) : NaN;
+      const sIva  = iSIva >= 0 ? this.num(f[iSIva]) : NaN;
+      if (!p.fval || fec >= p.fval) {
+        p.fval = fec;
+        if (isFinite(costo) && costo > 0) { if (p.costo !== costo) valorizados++; p.costo = costo; }
+        if (isFinite(repo) && repo > 0) p.repo = repo;
+        if (isFinite(sIva) && sIva > 0) p.pSinIva = sIva;
+        if (pu > 0) p.p = pu;
+      }
+
+      if (yaCargadas.has(clave)) continue;
+      yaCargadas.add(clave);
+
+      /* nota de crédito o devolución → resta */
+      const tc = iTC >= 0 ? this.norm(f[iTC]) : '';
+      const signo = /credito|crédito|devol/.test(tc) ? -1 : 1;
+      if (signo < 0) notas++;
 
       /* la cuenta se crea sola: "91 - KRONOS CYA" → KRONOS CYA */
       const txt = String(cli).trim();
@@ -223,24 +238,13 @@ const XLS = {
         cta.cod = codCli; cuentasNuevas++;
       }
 
-      /* el archivo trae el costo y el precio: así el stock queda valorizado */
-      const costo = iCos >= 0 ? this.num(f[iCos]) : NaN;
-      const repo  = iRep >= 0 ? this.num(f[iRep]) : NaN;
-      const sIva  = iSIva >= 0 ? this.num(f[iSIva]) : NaN;
-      if (!p.fval || fec >= p.fval) {
-        p.fval = fec;
-        if (isFinite(costo) && costo > 0) p.costo = costo;
-        if (isFinite(repo) && repo > 0) p.repo = repo;
-        if (isFinite(sIva) && sIva > 0) p.pSinIva = sIva;
-        if (pu > 0) p.p = pu;
-      }
       await DB.addVenta({ f: fec, m: +fec.split('-')[1] - 1, c: cta.id, p: p.id,
         u: signo * u, pu, o: 'Sistema', cmp, lote }, true);   /* no descuenta: ya viene descontado */
       nuevas++;
     }
     prodNuevos = PROD.length - antesP;
     DB.guardarLocal();
-    return { nuevas, notas, cuentasNuevas, prodNuevos };
+    return { nuevas, notas, cuentasNuevas, prodNuevos, valorizados };
   }
 };
 
@@ -260,6 +264,7 @@ async function importarVentasXLS(file) {
     const r = await XLS.ventas(file);
     toast(r.nuevas ? `${r.nuevas} línea(s) de venta cargadas${r.cuentasNuevas ? ` · ${r.cuentasNuevas} cuenta(s) nueva(s)` : ''}.`
                    : 'No había ventas nuevas: ya estaban todas cargadas.', 'ok');
+    if (r.valorizados) toast(`${r.valorizados} producto(s) con costo actualizado: el stock ya queda valorizado.`, 'ok');
     if (r.prodNuevos) toast(`${r.prodNuevos} producto(s) dados de alta desde el archivo.`);
     render();
   } catch (e) { toast(e.message, 'err'); }
