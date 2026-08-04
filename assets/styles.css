@@ -299,6 +299,9 @@ dialog.wide{max-width:560px}
 .hlist{margin:0;padding-left:18px;display:grid;gap:9px}
 .hlist li{font-size:13px;color:var(--gris);line-height:1.5}
 
+/* grupos de botones */
+.btnrow{display:flex;gap:8px;flex-wrap:wrap}
+
 /* ==========================================================
    CELULAR Y TABLET
    ========================================================== */
@@ -324,6 +327,9 @@ dialog.wide{max-width:560px}
  .pth{height:118px}
  .pimg{max-height:96px}
  .chead{gap:10px}
+ /* los botones ocupan el ancho: quedan parejos y son fáciles de tocar */
+ .btnrow{width:100%;flex-direction:column;gap:9px}
+ .btnrow .btn{width:100%}
  .chead .btn{width:100%}
  .stage{flex-wrap:wrap;border-radius:12px}
  .stage>div{flex:1 0 33%;border-bottom:2px solid var(--surface)}
@@ -343,28 +349,45 @@ dialog.wide{max-width:560px}
 }
 
 @media (max-width:760px){
- /* las tablas pasan a tarjetas */
+ /* las tablas pasan a tarjetas: título arriba y los datos en dos columnas */
  .tw{max-height:none;overflow:visible}
- table,tbody,tr,td{display:block;width:100%}
+ table,tbody{display:block;width:100%}
  thead{display:none}
- tr{border:1px solid var(--border);border-radius:14px;margin-bottom:10px;background:var(--surface);padding:4px 0}
+ tr{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px;
+  border:1px solid var(--border);border-radius:14px;margin-bottom:10px;
+  background:var(--surface);padding:12px 14px 13px}
  tbody tr:hover{background:var(--surface)}
- td{border:none;display:flex;justify-content:space-between;align-items:baseline;gap:16px;
-  padding:8px 14px;text-align:right}
- td::before{content:attr(data-l);font-size:10px;text-transform:uppercase;letter-spacing:.1em;
-  color:var(--cian);font-weight:700;text-align:left;flex:none;padding-top:2px}
+ td{display:block;border:none;padding:5px 0;text-align:left;font-size:13.5px;line-height:1.35}
+ td::before{content:attr(data-l);display:block;font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--cian);font-weight:700;margin-bottom:1px}
  td[data-l=""]::before{display:none}
- td.num{text-align:right}
+ td.num{text-align:left}
+ /* la primera columna es el encabezado de la tarjeta */
+ td.tit{grid-column:1 / -1;font-size:15px;padding:0 0 8px;
+  border-bottom:1px solid var(--border);margin-bottom:6px}
+ td.tit::before{display:none}
+ td.tit .mini{font-weight:400}
  .nota p{max-width:none}
 }
 
 @media (max-width:420px){
- .g4{grid-template-columns:1fr}
- .cat{grid-template-columns:1fr}
- .pth{height:150px}
+ /* el catálogo queda de a dos, como en la web */
+ .cat{grid-template-columns:1fr 1fr;gap:9px}
+ .pth{height:104px}
+ .pimg{max-height:88px}
+ .pbody{padding:11px}
+ .pbody b{font-size:13px}
+ .pdesc{font-size:10.5px}
+ .prow{font-size:12px}
  .f2,.dlg-b{grid-template-columns:1fr}
  .fld.half{grid-column:span 2}
  .stage>div{flex:1 0 50%}
+ /* los indicadores quedan de a dos, como en la web */
+ .g4{grid-template-columns:1fr 1fr}
+ .tile .val{font-size:19px;letter-spacing:-.02em}
+ .tile .lbl{font-size:9.5px}
+ .tile .dlt{font-size:11px}
+ .card{padding:15px}
 }
 
 /* pantallas muy anchas */
@@ -385,3 +408,6 @@ dialog.wide{max-width:560px}
 .cadena p{margin:12px 0 0;font-size:12px;color:var(--gris);max-width:70ch}
 
 .pcosto{font-size:11px;color:var(--ink-3);border-top:1px solid var(--grid);margin-top:8px;padding-top:8px}
+
+/* celdas vacías: no muestran su rótulo en la vista de tarjeta */
+@media (max-width:760px){td:empty::before{display:none}}

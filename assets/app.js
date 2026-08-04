@@ -1,7 +1,7 @@
 /* ============ HELPERS ============ */
 const $=s=>document.querySelector(s);
 const money=v=>'$ '+Math.round(v||0).toLocaleString('es-AR');
-const moneyK=v=>v>=1e6?'$ '+(v/1e6).toFixed(1)+'M':v>=1000?'$ '+Math.round(v/1000)+'k':'$ '+Math.round(v);
+const moneyK=(v,seco)=>{const p=seco?'':'$ ';return v>=1e6?p+(v/1e6).toFixed(1)+'M':v>=1000?p+Math.round(v/1000)+'k':p+Math.round(v);};
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hoy=()=>new Date().toISOString().slice(0,10);
 const fmtF=f=>f?String(f).split('-').reverse().join('/'):'—';
@@ -19,6 +19,7 @@ const diasA=f=>Math.round((new Date(f+'T12:00:00')-new Date())/864e5);
 const nivelVto=d=>d<0?['crit','Vencido']:d<=60?['crit','Crítico']:d<=90?['ser','Urgente']:d<=180?['warn','Vigilar']:['good','OK'];
 const CATC={'SNO':'var(--s1)','Sonda':'var(--s2)','Módulos':'var(--s3)'};
 const MIN_STOCK=50;
+const TACTIL=matchMedia('(hover:none)').matches;
 const costoDe=id=>{const p=P(id);return p?(p.costo||0):0;};
 const precioDe=id=>{const p=P(id);return p?(p.p||0):0;};
 const valorLote=l=>l.u*costoDe(l.p);
@@ -84,45 +85,56 @@ function campoHTML(c){
 }
 
 /* ============ GRÁFICOS ============ */
+/* en pantallas angostas el lienzo se achica: así el texto del gráfico
+   no queda microscópico al escalar el SVG al ancho de la tarjeta */
+const chico=()=>innerWidth<760;
 function lineChart(vals,labels){
- const W=760,H=230,ml=54,mr=14,mt=14,mb=26;
+ const ch=chico();
+ const W=ch?370:760,H=ch?210:230,ml=ch?38:54,mr=ch?18:14,mt=14,mb=ch?24:26,FS=ch?11:10.5;
  const max=Math.max(...vals)*1.15||1,iw=W-ml-mr,ih=H-mt-mb;
  const x=i=>ml+(iw*i)/Math.max(1,vals.length-1),y=v=>mt+ih-(v/max)*ih;
  const pts=vals.map((v,i)=>[x(i),y(v)]);
  const d=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
  const area=d+` L${x(vals.length-1).toFixed(1)} ${mt+ih} L${ml} ${mt+ih} Z`;
  let t='';for(let k=0;k<=3;k++){const v=max*k/3,yy=y(v);
-  t+=`<line x1="${ml}" x2="${W-mr}" y1="${yy}" y2="${yy}" stroke="var(--grid)"/><text x="${ml-8}" y="${yy+4}" text-anchor="end" fill="var(--ink-3)" font-size="10.5">${moneyK(v)}</text>`;}
- const xl=labels.map((l,i)=>`<text x="${x(i)}" y="${H-7}" text-anchor="middle" fill="var(--ink-3)" font-size="10.5">${l}</text>`).join('');
+  t+=`<line x1="${ml}" x2="${W-mr}" y1="${yy}" y2="${yy}" stroke="var(--grid)"/><text x="${ml-8}" y="${yy+4}" text-anchor="end" fill="var(--ink-3)" font-size="${FS}">${moneyK(v,ch)}</text>`;}
+ const xl=labels.map((l,i)=>`<text x="${x(i)}" y="${H-7}" text-anchor="middle" fill="var(--ink-3)" font-size="${FS}">${l}</text>`).join('');
  const hot=vals.map((v,i)=>`<rect x="${x(i)-iw/(2*Math.max(1,vals.length-1))}" y="${mt}" width="${iw/Math.max(1,vals.length-1)}" height="${ih}" fill="transparent" data-i="${i}"/>`).join('');
  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" class="lc">
   <defs><linearGradient id="lg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--s1)" stop-opacity=".18"/><stop offset="100%" stop-color="var(--s1)" stop-opacity="0"/></linearGradient></defs>
   ${t}<path d="${area}" fill="url(#lg)"/><path d="${d}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-  ${pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="4" fill="var(--surface)" stroke="var(--s1)" stroke-width="2"/>`).join('')}
+  ${pts.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="${ch?3.5:4}" fill="var(--surface)" stroke="var(--s1)" stroke-width="2"/>`).join('')}
   <line id="ch" x1="0" x2="0" y1="${mt}" y2="${mt+ih}" stroke="var(--axis)" stroke-dasharray="3 3" opacity="0"/>${xl}${hot}</svg>`;
 }
 function bindLine(root,labels,extra){
  const svg=root&&root.querySelector('.lc'); if(!svg)return;
  const ch=svg.querySelector('#ch');
  svg.querySelectorAll('rect[data-i]').forEach(r=>{
-  r.addEventListener('mousemove',e=>{const i=+r.dataset.i,cx=+r.getAttribute('x')+ +r.getAttribute('width')/2;
+  const ver=e=>{const i=+r.dataset.i,cx=+r.getAttribute('x')+ +r.getAttribute('width')/2;
    ch.setAttribute('x1',cx);ch.setAttribute('x2',cx);ch.setAttribute('opacity','1');
-   showTip(e,`<b>${labels[i]} ${AÑO}</b>${extra(i)}`);});
-  r.addEventListener('mouseleave',()=>{ch.setAttribute('opacity','0');hideTip();});});
+   showTip(e,`<b>${labels[i]} ${AÑO}</b>${extra(i)}`);};
+  const salir=()=>{ch.setAttribute('opacity','0');hideTip();};
+  r.addEventListener('mousemove',ver);
+  r.addEventListener('mouseleave',salir);
+  /* en el celular se toca el gráfico */
+  r.addEventListener('touchstart',e=>{const t=e.touches[0];
+   ver({clientX:t.clientX,clientY:t.clientY});},{passive:true});
+  r.addEventListener('touchend',salir,{passive:true});});
 }
 function stackChart(cats,meses){
- const W=760,H=210,ml=54,mr=14,mt=12,mb=26,n=meses.length;
+ const ch=chico();
+ const W=ch?370:760,H=ch?200:210,ml=ch?38:54,mr=ch?18:14,mt=12,mb=ch?24:26,FS=ch?11:10.5,n=meses.length;
  const series=cats.map(c=>meses.map(m=>fact(ventasMes(m).filter(v=>P(v.p)&&P(v.p).cat===c))));
  const tot=meses.map((_,i)=>series.reduce((a,s)=>a+s[i],0));
- const max=Math.max(...tot)*1.12||1,iw=W-ml-mr,ih=H-mt-mb,bw=Math.min(46,iw/n-14);
+ const max=Math.max(...tot)*1.12||1,iw=W-ml-mr,ih=H-mt-mb,bw=Math.min(ch?26:46,iw/n-(ch?8:14));
  let g='';for(let k=0;k<=3;k++){const yy=mt+ih-(ih*k/3);
-  g+=`<line x1="${ml}" x2="${W-mr}" y1="${yy}" y2="${yy}" stroke="var(--grid)"/><text x="${ml-8}" y="${yy+4}" text-anchor="end" fill="var(--ink-3)" font-size="10.5">${moneyK(max*k/3)}</text>`;}
+  g+=`<line x1="${ml}" x2="${W-mr}" y1="${yy}" y2="${yy}" stroke="var(--grid)"/><text x="${ml-8}" y="${yy+4}" text-anchor="end" fill="var(--ink-3)" font-size="${FS}">${moneyK(max*k/3,ch)}</text>`;}
  let bars='';
  meses.forEach((m,i)=>{const cx=ml+(iw*(i+.5))/n-bw/2;let acc=0;
   cats.forEach((c,ci)=>{const v=series[ci][i];if(v<=0)return;
    const h=(v/max)*ih,yy=mt+ih-((acc+v)/max)*ih;acc+=v;
    bars+=`<rect x="${cx}" y="${yy+1}" width="${bw}" height="${Math.max(0,h-2)}" rx="3" fill="${CATC[c]}" data-m="${m}" data-c="${ci}"/>`;});
-  bars+=`<text x="${cx+bw/2}" y="${H-7}" text-anchor="middle" fill="var(--ink-3)" font-size="10.5">${MESES[m]}</text>`;});
+  bars+=`<text x="${cx+bw/2}" y="${H-7}" text-anchor="middle" fill="var(--ink-3)" font-size="${FS}">${MESES[m]}</text>`;});
  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" class="sc">${g}${bars}</svg>`;
 }
 function barsH(rows,color){
@@ -137,7 +149,8 @@ function barsH(rows,color){
 /* tabla que en el celular se convierte en tarjetas */
 function tbl(cols,filas){
  return `<div class="tw"><table><thead><tr>${cols.map(c=>`<th${c.n?' class="num"':''}>${esc(c.t)}</th>`).join('')}</tr></thead>
- <tbody>${filas.map(f=>`<tr>${f.map((c,i)=>`<td${cols[i].n?' class="num"':''} data-l="${esc(cols[i].t)}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+ <tbody>${filas.map(f=>`<tr>${f.map((c,i)=>{const k=[cols[i].n?'num':'',i===0?'tit':''].filter(Boolean).join(' ');
+  return `<td${k?` class="${k}"`:''} data-l="${esc(cols[i].t)}">${c}</td>`;}).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function vacio(txt,btn){
  return `<div class="empty"><p>${txt}</p>${btn?`<button class="btn pri" onclick="${btn.fn}">${esc(btn.t)}</button>`:''}</div>`;
@@ -285,7 +298,7 @@ V.panel=()=>{
    <div class="dlt">vencimientos + quiebres de stock</div></div>
  </div>
  <div class="grid g23" style="margin-bottom:16px">
-  <div class="card"><h3>Evolución de facturación</h3><p class="sub">${AÑO} · pasá el mouse por el gráfico</p>
+  <div class="card"><h3>Evolución de facturación</h3><p class="sub">${AÑO} · ${TACTIL?'tocá el gráfico para ver cada mes':'pasá el mouse por el gráfico'}</p>
    <div id="lcw">${VENTAS.length?lineChart(serieFact().slice(0,hastaMes()+1),MESES.slice(0,hastaMes()+1)):vacio('Todavía no hay ventas cargadas.',{t:'+ Cargar la primera venta',fn:'nuevaVenta()'})}</div></div>
   <div class="card"><h3>Estado de la cartera</h3><p class="sub">${CUENTAS.length} cuenta${CUENTAS.length===1?'':'s'} en seguimiento</p>
    ${CUENTAS.length?barsH(ESTADOS.map(e=>({n:e,v:CUENTAS.filter(c=>c.e===e).length,t:CUENTAS.filter(c=>c.e===e).length+''})).filter(r=>r.v),'var(--s1)'):
@@ -342,7 +355,7 @@ V.ventas=()=>{
  return `<div class="card">
   <div class="chead"><div><h3>Ventas de ${MESES[MES]} ${AÑO}</h3>
    <p class="sub">${vm.length} operaciones · ${money(fact(vm))}</p></div>
-   <div style="display:flex;gap:8px;flex-wrap:wrap">
+   <div class="btnrow">
    <button class="btn" onclick="$('#xlsVentas').click()">↥ Subir ventas del sistema</button>
    <button class="btn pri" onclick="nuevaVenta()">+ Cargar venta</button></div></div>
   ${vm.length?tbl(
@@ -415,7 +428,7 @@ V.tienda=()=>{
  return `<div class="card sync" style="margin-bottom:16px">
   <div class="chead"><div><h3>Tienda online</h3>
    <p class="sub">${CFG_TIENDA.url?`Conectada${ult?' · última lectura '+ult.toLocaleString('es-AR'):''}`:'Sin conectar. Los pedidos entran desde una hoja que actualiza la tienda.'}</p></div>
-   <div style="display:flex;gap:8px">
+   <div class="btnrow">
     <button class="btn" onclick="configTienda()">${CFG_TIENDA.url?'Cambiar enlace':'Conectar tienda'}</button>
     ${CFG_TIENDA.url?'<button class="btn pri" onclick="sincronizarTienda()">↻ Traer pedidos</button>':''}</div></div>
   <div class="cadena">
@@ -457,7 +470,7 @@ V.stock=()=>{
  return `<div class="card sync" style="margin-bottom:16px">
   <div class="chead"><div><h3>Planilla de logística</h3>
    <p class="sub">${ult?`Última actualización ${ult.toLocaleString('es-AR')}${CFG_SHEET.origen==='archivo'?' · desde archivo del sistema':' · desde la planilla'}`:'Subí el archivo de stock que descargás del sistema, o conectá una planilla de Google.'}</p></div>
-   <div style="display:flex;gap:8px">
+   <div class="btnrow">
     <button class="btn pri" onclick="$('#xlsStock').click()">↥ Subir archivo de stock</button>
     <button class="btn" onclick="configSheet()">${CFG_SHEET.url?'Cambiar enlace':'Conectar planilla'}</button>
     ${CFG_SHEET.url?'<button class="btn" onclick="sincronizar()">↻ Sincronizar</button>':''}
@@ -513,7 +526,7 @@ V.base=()=>{
  return `<div class="card" style="margin-bottom:16px">
   <div class="chead"><div><h3>Base unificada de contactos</h3>
    <p class="sub">Universidades, jornadas, clínicas y campañas en un solo lugar</p></div>
-   <div style="display:flex;gap:8px"><button class="btn" onclick="$('#csvIn').click()">↥ Importar CSV</button>
+   <div class="btnrow"><button class="btn" onclick="$('#csvIn').click()">↥ Importar CSV</button>
    <button class="btn pri" onclick="nuevoContacto()">+ Nuevo contacto</button></div></div>
   ${CONTACTOS.length?`<div class="grid g4">
    <div class="card tile" style="padding:16px"><div class="lbl">Contactos</div><div class="val" style="font-size:24px">${CONTACTOS.length}</div></div>
@@ -537,7 +550,7 @@ V.reportes=()=>{
  const porCat=['SNO','Sonda','Módulos'].map(c=>({c,v:fact(vm.filter(x=>P(x.p)?.cat===c))}));
  const porCta=Object.values(vm.reduce((a,v)=>{(a[v.c]=a[v.c]||{n:C(v.c)?.n||'—',v:0});a[v.c].v+=v.u*v.pu;return a;},{})).sort((a,b)=>b.v-a.v);
  return `<div class="card" style="margin-bottom:16px"><h3>Exportar</h3><p class="sub">Para dirección comercial y casa matriz</p>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
+  <div class="btnrow">
    <button class="btn pri" onclick="exportVentas()">↧ Ventas del mes (.csv)</button>
    <button class="btn" onclick="window.print()">↧ Reporte ejecutivo (PDF)</button>
    <button class="btn" onclick="exportStock()">↧ Stock valorizado (.csv)</button>
@@ -679,4 +692,11 @@ $('#loginForm').addEventListener('submit',async e=>{
  catch(err){$('#loginErr').textContent='No pudimos entrar: '+(err.message||err);}
  b.disabled=false;b.textContent='Entrar';});
 $('#logout').addEventListener('click',()=>DB.logout());
+
+/* al girar el celular o cambiar el tamaño, los gráficos se rehacen a la nueva medida */
+let anchoPrev=chico();
+let tRedim;
+addEventListener('resize',()=>{clearTimeout(tRedim);tRedim=setTimeout(()=>{
+ if(chico()!==anchoPrev){anchoPrev=chico();render();}},220);});
+
 boot();
