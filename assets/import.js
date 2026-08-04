@@ -119,6 +119,9 @@ const XLS = {
     const iVto = this.col(head, 'Vencimiento', 'Vto');
     const iDep = this.col(head, 'Depósito', 'Deposito');
     const iSuc = this.col(head, 'Sucursal');
+    const iCos = this.col(head, 'Costo Unit', 'CostoUnit', 'Costo');
+    const iPre = this.col(head, 'Precio Unit', 'Precio', 'PreUniVta');
+    const iVal = this.col(head, 'Valorizado', 'Importe', 'Valor');
     if (iStk < 0 || (iCod < 0 && iDes < 0))
       throw new Error('No reconozco el archivo. Esperaba las columnas Codigo, Descripción y Stock Actual.');
 
@@ -137,6 +140,10 @@ const XLS = {
       const dep = iDep >= 0 ? this.norm(f[iDep]) : '';
       if (/cuarentena|rechaz|vencid|baja/.test(dep)) { omitidos.push(this.limpiar(des)); continue; }
       const p = await this.producto(cod, des);
+      /* si la planilla trae valores, esos mandan sobre lo que veníamos usando */
+      if (iCos >= 0) { const c = this.num(f[iCos]); if (isFinite(c) && c > 0) p.costo = c; }
+      if (iPre >= 0) { const v = this.num(f[iPre]); if (isFinite(v) && v > 0) p.p = v; }
+      if (iVal >= 0 && u > 0) { const t = this.num(f[iVal]); if (isFinite(t) && t > 0) p.costo = t / u; }
       const lote = iPar >= 0 && f[iPar] ? String(f[iPar]).trim() : '—';
       const vto = iVto >= 0 ? this.fecha(f[iVto]) : null;
       const suc = iSuc >= 0 && f[iSuc] ? String(f[iSuc]).trim() : '';
@@ -168,6 +175,9 @@ const XLS = {
     const iLot = this.col(head, 'Lote', 'Partida');
     const iVen = this.col(head, 'Vendedor');
     const iTC  = this.col(head, 'TComp');
+    const iCos = this.col(head, 'CostoUnit', 'Costo Unit');
+    const iRep = this.col(head, 'Costo Repo Unit', 'Costo Repo');
+    const iSIva = this.col(head, 'PrecUnit');
     if (iCli < 0 || iCan < 0 || (iCod < 0 && iPro < 0))
       throw new Error('No reconozco el archivo. Esperaba las columnas Cliente, Cod Prod, Producto y Cantidad.');
 
@@ -213,6 +223,17 @@ const XLS = {
         cta.cod = codCli; cuentasNuevas++;
       }
 
+      /* el archivo trae el costo y el precio: así el stock queda valorizado */
+      const costo = iCos >= 0 ? this.num(f[iCos]) : NaN;
+      const repo  = iRep >= 0 ? this.num(f[iRep]) : NaN;
+      const sIva  = iSIva >= 0 ? this.num(f[iSIva]) : NaN;
+      if (!p.fval || fec >= p.fval) {
+        p.fval = fec;
+        if (isFinite(costo) && costo > 0) p.costo = costo;
+        if (isFinite(repo) && repo > 0) p.repo = repo;
+        if (isFinite(sIva) && sIva > 0) p.pSinIva = sIva;
+        if (pu > 0) p.p = pu;
+      }
       await DB.addVenta({ f: fec, m: +fec.split('-')[1] - 1, c: cta.id, p: p.id,
         u: signo * u, pu, o: 'Sistema', cmp, lote }, true);   /* no descuenta: ya viene descontado */
       nuevas++;

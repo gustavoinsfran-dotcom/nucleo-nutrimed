@@ -131,10 +131,11 @@ const DB = {
     this.guardarLocal();
   },
 
-  async setPrecio(sku, precio) {
+  async setPrecio(sku, precio, costo) {
     const p = P(sku); if (!p) return;
     p.p = precio;
-    if (this.modo === 'vivo') await this.sb.from('producto').update({ precio }).eq('sku', sku);
+    if (costo !== undefined && costo !== null && isFinite(costo)) p.costo = costo || 0;
+    if (this.modo === 'vivo') await this.sb.from('producto').update({ precio, costo: p.costo || null }).eq('sku', sku);
     this.guardarLocal();
   },
 

@@ -19,6 +19,10 @@ const diasA=f=>Math.round((new Date(f+'T12:00:00')-new Date())/864e5);
 const nivelVto=d=>d<0?['crit','Vencido']:d<=60?['crit','Crítico']:d<=90?['ser','Urgente']:d<=180?['warn','Vigilar']:['good','OK'];
 const CATC={'SNO':'var(--s1)','Sonda':'var(--s2)','Módulos':'var(--s3)'};
 const MIN_STOCK=50;
+const costoDe=id=>{const p=P(id);return p?(p.costo||0):0;};
+const precioDe=id=>{const p=P(id);return p?(p.p||0):0;};
+const valorLote=l=>l.u*costoDe(l.p);
+const valorVentaLote=l=>l.u*precioDe(l.p);
 const esOnline=v=>v.o==='Ecommerce';
 const ventasCanal=(m,online)=>ventasMes(m).filter(v=>esOnline(v)===online);
 const vendidoUlt3=id=>{const m=[MES,MES-1,MES-2].filter(x=>x>=0);
@@ -208,9 +212,11 @@ function nuevaVenta(){
 }
 function editarPrecio(sku){
  const p=P(sku);
- modal({titulo:p.n,ok:'Guardar precio',campos:[
-  {k:'p',l:'Precio de lista por '+p.pres,t:'number',val:p.p,req:true}],
-  onOk:async v=>{await DB.setPrecio(sku,+v.p);toast('Precio actualizado.');render();}});
+ modal({titulo:p.n,ok:'Guardar',campos:[
+  {k:'p',l:'Precio de lista por '+p.pres,t:'number',val:p.p,req:true},
+  {k:'costo',l:'Costo unitario',t:'number',val:p.costo||'',
+   hint:'Es el valor con el que se calcula el stock valorizado. Lo trae solo el archivo de ventas del sistema (columna CostoUnit); si este producto todavía no tuvo ventas, cargalo acá.'}],
+  onOk:async v=>{await DB.setPrecio(sku,+v.p,v.costo===''?undefined:+v.costo);toast('Producto actualizado.');render();}});
 }
 function configSheet(){
  modal({titulo:'Conectar la planilla de logística',ok:'Guardar y sincronizar',ancho:'560px',campos:[
@@ -392,6 +398,7 @@ V.catalogo=()=>{
       <div class="mini">${esc(p.pres)}</div>
       <div class="prow"><span>${p.p?money(p.p):'<i class="falta">sin precio</i>'}</span>
        <span class="mini">${st?st+' u.':'sin stock'}${cob!==null?` · ${cob.toFixed(1)} m`:''}</span></div>
+      ${p.costo?`<div class="pcosto">Costo ${money(p.costo)}${p.p>p.costo?` · margen ${((1-p.costo/p.p)*100).toFixed(0)}%`:''}</div>`:''}
      </div></div>`}).join('')}</div>`).join('')}
   <p class="src">Las fotos van en <code>assets/productos/</code> con el nombre del SKU (por ejemplo <code>SNO-ONCO-300.png</code>). Los ocho orales ya tienen la suya, tomada del vademécum; el resto muestra el ícono de la categoría hasta que lleguen los packshots.</p>
  </div>`;
@@ -441,8 +448,10 @@ V.tienda=()=>{
 
 V.stock=()=>{
  const rows=LOTES.map(l=>({l,d:diasA(l.v)})).sort((a,b)=>a.d-b.d);
- const val=LOTES.reduce((a,l)=>a+l.u*(P(l.p)?.p||0),0);
- const riesgo=rows.filter(r=>r.d<=90).reduce((a,r)=>a+r.l.u*(P(r.l.p)?.p||0),0);
+ const valCosto=LOTES.reduce((a,l)=>a+valorLote(l),0);
+ const valVenta=LOTES.reduce((a,l)=>a+valorVentaLote(l),0);
+ const riesgo=rows.filter(r=>r.d<=90).reduce((a,r)=>a+valorLote(r.l),0);
+ const sinValor=LOTES.filter(l=>!costoDe(l.p)).length;
  const bajo=PROD.filter(p=>LOTES.some(l=>l.p===p.id)&&stockDe(p.id)<MIN_STOCK);
  const ult=CFG_SHEET.ultima?new Date(CFG_SHEET.ultima):null;
  return `<div class="card sync" style="margin-bottom:16px">
@@ -456,17 +465,24 @@ V.stock=()=>{
   <p class="mini">Del archivo del sistema toma <b>Codigo</b>, <b>Descripción</b>, <b>Stock Actual</b>, <b>Partida</b> y <b>Vencimiento</b>. Ignora las filas de totales y los depósitos en cuarentena o rechazados. El archivo se procesa en tu equipo: no se sube a ningún lado.</p>
  </div>
  ${LOTES.length?`
- <div class="grid g3" style="margin-bottom:16px">
-  <div class="card tile"><div class="lbl">Valor de stock</div><div class="val">${money(val)}</div><div class="dlt">${LOTES.reduce((a,l)=>a+l.u,0)} unidades en ${LOTES.length} lotes</div></div>
-  <div class="card tile"><div class="lbl">En riesgo (≤90 días)</div><div class="val" style="color:var(--critical)">${money(riesgo)}</div><div class="dlt">${rows.filter(r=>r.d<=90).length} lotes por vencer</div></div>
-  <div class="card tile"><div class="lbl">Productos en quiebre</div><div class="val" style="color:var(--serious)">${bajo.length}</div><div class="dlt">bajo el mínimo de ${MIN_STOCK} unidades</div></div>
+ <div class="grid g4" style="margin-bottom:16px">
+  <div class="card tile"><div class="lbl">Valorizado a costo</div><div class="val">${money(valCosto)}</div>
+   <div class="dlt">${LOTES.reduce((a,l)=>a+l.u,0).toLocaleString('es-AR')} unidades en ${LOTES.length} lotes</div></div>
+  <div class="card tile"><div class="lbl">Valorizado a venta</div><div class="val">${money(valVenta)}</div>
+   <div class="dlt">${valCosto?`margen potencial ${money(valVenta-valCosto)}`:'falta cargar precios'}</div></div>
+  <div class="card tile"><div class="lbl">En riesgo (≤90 días)</div><div class="val" style="color:var(--critical)">${money(riesgo)}</div>
+   <div class="dlt">${rows.filter(r=>r.d<=90).length} lotes por vencer · a costo</div></div>
+  <div class="card tile"><div class="lbl">Productos en quiebre</div><div class="val" style="color:var(--serious)">${bajo.length}</div>
+   <div class="dlt">bajo el mínimo de ${MIN_STOCK} unidades</div></div>
  </div>
+ ${sinValor?`<div class="demo" style="margin-bottom:16px">${sinValor} lote(s) sin costo cargado, así que no suman al valorizado. El costo entra con el archivo de ventas del sistema (columna CostoUnit); si el producto todavía no tuvo ventas, cargalo a mano desde Catálogo.</div>`:''}
  <div class="card"><h3>Lotes</h3><p class="sub">Orden FEFO — primero el que vence antes</p>
- ${tbl([{t:'Producto'},{t:'Lote'},{t:'Unid.',n:1},{t:'Vence'},{t:'Días',n:1},{t:'Estado'}],
-  rows.map(r=>{const[n,t]=nivelVto(r.d);
+ ${tbl([{t:'Producto'},{t:'Lote'},{t:'Unid.',n:1},{t:'Costo unit.',n:1},{t:'Valorizado',n:1},{t:'Vence'},{t:'Días',n:1},{t:'Estado'}],
+  rows.map(r=>{const[n,t]=nivelVto(r.d);const c=costoDe(r.l.p);
    return [`<b>${esc(P(r.l.p)?.n||r.l.p)}</b><div class="mini">${esc(P(r.l.p)?.pres||'')}</div>`,
-    esc(r.l.l),r.l.u,fmtF(r.l.v),r.d,`<span class="tag t-${n}"><span class="d"></span>${t}</span>`];}))}
- <p class="src">Al cargar una venta se descuenta del lote más próximo a vencer. La próxima sincronización vuelve a tomar los números de logística.</p></div>`
+    esc(r.l.l),r.l.u,c?money(c):'<span class="mini">—</span>',c?money(valorLote(r.l)):'<span class="mini">—</span>',
+    fmtF(r.l.v),r.d,`<span class="tag t-${n}"><span class="d"></span>${t}</span>`];}))}
+ <p class="src">Al cargar una venta se descuenta del lote más próximo a vencer. El valorizado usa el costo unitario que trae el archivo de ventas del sistema; si la planilla de stock incluye su propia columna de costo o valorizado, esa manda.</p></div>`
  :vacio('Sin stock cargado todavía.',{t:'Conectar planilla de logística',fn:'configSheet()'})}`;
 };
 
@@ -524,6 +540,7 @@ V.reportes=()=>{
   <div style="display:flex;gap:8px;flex-wrap:wrap">
    <button class="btn pri" onclick="exportVentas()">↧ Ventas del mes (.csv)</button>
    <button class="btn" onclick="window.print()">↧ Reporte ejecutivo (PDF)</button>
+   <button class="btn" onclick="exportStock()">↧ Stock valorizado (.csv)</button>
    <button class="btn" onclick="exportBase()">↧ Base de contactos (.csv)</button>
    <button class="btn" onclick="exportTodo()">↧ Respaldo completo (.json)</button></div></div>
  <div class="card"><h3>Resumen — ${MESES[MES]} ${AÑO}</h3><p class="sub">Vista previa de lo que se exporta</p>
@@ -549,6 +566,12 @@ function exportVentas(){dl(`nucleo_ventas_${MESES[MES]}_${AÑO}.csv`,[['Fecha','
  ...ventasMes(MES).map(v=>[v.f,C(v.c)?.n,C(v.c)?.t,C(v.c)?.z,P(v.p)?.n,P(v.p)?.pres,P(v.p)?.cat,v.u,v.pu,v.u*v.pu,v.o])]);}
 function exportBase(){dl('nucleo_contactos.csv',[['Nombre','Rol','Institucion','Email','Telefono','Origen','Alta','Consentimiento','Cuenta'],
  ...CONTACTOS.map(c=>[c.n,c.r,c.i,c.mail,c.tel,c.o,c.f,c.cons?'si':'no',c.cta?C(c.cta)?.n:''])]);}
+function exportStock(){dl(`nucleo_stock_valorizado_${MESES[MES]}_${AÑO}.csv`,
+ [['Producto','Presentacion','Categoria','Lote','Unidades','Costo unitario','Valorizado a costo','Precio de lista','Valorizado a venta','Vencimiento','Dias','Estado'],
+ ...LOTES.map(l=>({l,d:diasA(l.v)})).sort((a,b)=>a.d-b.d).map(r=>{const[,t]=nivelVto(r.d);
+  return [P(r.l.p)?.n||r.l.p,P(r.l.p)?.pres||'',P(r.l.p)?.cat||'',r.l.l,r.l.u,
+   costoDe(r.l.p)||'',costoDe(r.l.p)?valorLote(r.l):'',precioDe(r.l.p)||'',precioDe(r.l.p)?valorVentaLote(r.l):'',
+   r.l.v,r.d,t];})]);}
 function exportTodo(){bajar('nucleo_respaldo.json',new Blob([DB.exportar()],{type:'application/json'}));}
 
 /* importar contactos desde CSV */
