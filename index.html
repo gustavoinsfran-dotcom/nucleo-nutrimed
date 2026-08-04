@@ -8,7 +8,7 @@
 <title>NÚCLEO — Sistema Comercial · Infinity Nutrición</title>
 <link rel="icon" href="assets/favicon.svg">
 <link rel="apple-touch-icon" href="assets/favicon.svg">
-<link rel="stylesheet" href="assets/styles.css?v=5">
+<link rel="stylesheet" href="assets/styles.css?v=8">
 </head>
 <body>
 
@@ -40,6 +40,7 @@
     <button class="nav" data-v="cuentas"><span class="ic">◎</span>Cuentas</button>
     <button class="nav" data-v="catalogo"><span class="ic">▩</span>Catálogo</button>
     <button class="nav" data-v="stock"><span class="ic">▦</span>Stock<span class="pill" id="pillStock" style="display:none">0</span></button>
+    <button class="nav" data-v="tienda"><span class="ic">◍</span>Tienda online</button>
     <button class="nav" data-v="acciones"><span class="ic">◈</span>Acciones</button>
     <button class="nav" data-v="base"><span class="ic">☰</span>Base de datos</button>
     <button class="nav" data-v="reportes"><span class="ic">↧</span>Reportes</button>
@@ -75,13 +76,17 @@
 <div class="tip" id="tip"></div>
 <dialog id="dlg"></dialog>
 <input type="file" id="csvIn" accept=".csv,text/csv" class="hide">
+<input type="file" id="xlsStock" accept=".xlsx,.xls" class="hide">
+<input type="file" id="xlsVentas" accept=".xlsx,.xls" class="hide">
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="assets/config.js?v=5"></script>
-<script src="assets/data.js?v=5"></script>
-<script src="assets/sheets.js?v=5"></script>
-<script src="assets/store.js?v=5"></script>
-<script src="assets/ux.js?v=5"></script>
-<script src="assets/app.js?v=5"></script>
+<script src="assets/vendor/xlsx.full.min.js?v=8"></script>
+<script src="assets/config.js?v=8"></script>
+<script src="assets/data.js?v=8"></script>
+<script src="assets/sheets.js?v=8"></script>
+<script src="assets/store.js?v=8"></script>
+<script src="assets/ux.js?v=8"></script>
+<script src="assets/import.js?v=8"></script>
+<script src="assets/app.js?v=8"></script>
 </body>
 </html>
