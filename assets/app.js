@@ -336,7 +336,9 @@ V.ventas=()=>{
  return `<div class="card">
   <div class="chead"><div><h3>Ventas de ${MESES[MES]} ${AÑO}</h3>
    <p class="sub">${vm.length} operaciones · ${money(fact(vm))}</p></div>
-   <button class="btn pri" onclick="nuevaVenta()">+ Cargar venta</button></div>
+   <div style="display:flex;gap:8px;flex-wrap:wrap">
+   <button class="btn" onclick="$('#xlsVentas').click()">↥ Subir ventas del sistema</button>
+   <button class="btn pri" onclick="nuevaVenta()">+ Cargar venta</button></div></div>
   ${vm.length?tbl(
    [{t:'Fecha'},{t:'Cuenta'},{t:'Producto'},{t:'Unid.',n:1},{t:'Total',n:1},{t:'Origen'}],
    vm.map(v=>[fmtF(v.f),`<b>${esc(C(v.c)?.n||'—')}</b>`,
@@ -445,12 +447,13 @@ V.stock=()=>{
  const ult=CFG_SHEET.ultima?new Date(CFG_SHEET.ultima):null;
  return `<div class="card sync" style="margin-bottom:16px">
   <div class="chead"><div><h3>Planilla de logística</h3>
-   <p class="sub">${CFG_SHEET.url?`Conectada${ult?' · última lectura '+ult.toLocaleString('es-AR'):''}`:'Sin conectar. El stock y los vencimientos se leen desde la planilla que usa logística.'}</p></div>
+   <p class="sub">${ult?`Última actualización ${ult.toLocaleString('es-AR')}${CFG_SHEET.origen==='archivo'?' · desde archivo del sistema':' · desde la planilla'}`:'Subí el archivo de stock que descargás del sistema, o conectá una planilla de Google.'}</p></div>
    <div style="display:flex;gap:8px">
+    <button class="btn pri" onclick="$('#xlsStock').click()">↥ Subir archivo de stock</button>
     <button class="btn" onclick="configSheet()">${CFG_SHEET.url?'Cambiar enlace':'Conectar planilla'}</button>
-    ${CFG_SHEET.url?'<button class="btn pri" onclick="sincronizar()">↻ Sincronizar ahora</button>':''}
+    ${CFG_SHEET.url?'<button class="btn" onclick="sincronizar()">↻ Sincronizar</button>':''}
     <button class="btn" onclick="nuevoLote()">+ Lote a mano</button></div></div>
-  ${CFG_SHEET.url?'':`<p class="mini">Columnas que reconoce: producto o SKU, lote, unidades o cantidad, vencimiento. El orden no importa. Solo lee: nunca escribe en la planilla de ellos.</p>`}
+  <p class="mini">Del archivo del sistema toma <b>Codigo</b>, <b>Descripción</b>, <b>Stock Actual</b>, <b>Partida</b> y <b>Vencimiento</b>. Ignora las filas de totales y los depósitos en cuarentena o rechazados. El archivo se procesa en tu equipo: no se sube a ningún lado.</p>
  </div>
  ${LOTES.length?`
  <div class="grid g3" style="margin-bottom:16px">
@@ -641,6 +644,8 @@ $('#burger').addEventListener('click',abrirMenu);
 $('#backdrop').addEventListener('click',cerrarMenu);
 addEventListener('keydown',e=>{if(e.key==='Escape'){cerrarMenu();if(tour.activo)tour.cerrar();}});
 $('#csvIn').addEventListener('change',e=>{if(e.target.files[0])importarCSV(e.target.files[0]);e.target.value='';});
+$('#xlsStock').addEventListener('change',e=>{if(e.target.files[0])importarStockXLS(e.target.files[0]);e.target.value='';});
+$('#xlsVentas').addEventListener('change',e=>{if(e.target.files[0])importarVentasXLS(e.target.files[0]);e.target.value='';});
 document.addEventListener('mousemove',e=>{if(tip.style.opacity==1)moveTip(e);});
 $('#loginForm').addEventListener('submit',async e=>{
  e.preventDefault();const b=$('#loginBtn');b.disabled=true;b.textContent='Entrando…';

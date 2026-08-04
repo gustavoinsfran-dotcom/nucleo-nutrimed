@@ -138,11 +138,14 @@ const DB = {
     this.guardarLocal();
   },
 
-  /* alta de venta con descuento FEFO */
-  async addVenta(v) {
-    let resto = v.u;
+  /* alta de venta con descuento FEFO.
+     Las ventas importadas del sistema NO descuentan: el archivo de stock del sistema
+     ya viene con esas salidas aplicadas. Descuentan solo las que se cargan a mano
+     y las del ecommerce, que todavía no están reflejadas en el archivo. */
+  async addVenta(v, sinStock) {
+    let resto = sinStock ? 0 : v.u;
     const tocados = [];
-    LOTES.filter(l => l.p === v.p).sort((a, b) => a.v.localeCompare(b.v)).forEach(l => {
+    if (!sinStock) LOTES.filter(l => l.p === v.p).sort((a, b) => a.v.localeCompare(b.v)).forEach(l => {
       if (resto <= 0) return;
       const q = Math.min(l.u, resto); l.u -= q; resto -= q; tocados.push(l);
     });
