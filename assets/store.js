@@ -76,7 +76,7 @@ const DB = {
     ACCIONES = a.data.map(r => ({ id: r.id, n: r.nombre, t: r.tipo, f: r.fecha, inv: Number(r.inversion || 0), cont: r.contactos || 0, cta: r.cuentas || 0, vta: r.ventas || 0, est: r.estado }));
     CONTACTOS = k.data.map(r => ({ id: r.id, n: r.nombre, r: r.rol, i: r.institucion,
       mail: r.email || '', tel: r.telefono || '', o: r.origen, f: r.alta, cta: r.cuenta_id,
-      cons: r.consentimiento, cat: r.categoria || 'A confirmar', pista: r.pista || '',
+      cat: r.categoria || 'A confirmar', pista: r.pista || '',
       tipo: r.tipo_origen || '', et: r.etapa || 'Cargado', arch: r.archivo || '' }));
   },
 
@@ -107,7 +107,7 @@ const DB = {
     if (this.modo === 'vivo') {
       const { data, error } = await this.sb.from('contacto').insert({
         nombre: x.n, rol: x.r, institucion: x.i, email: x.mail, telefono: x.tel,
-        origen: x.o, cuenta_id: x.cta || null, consentimiento: x.cons || 'Pendiente', alta: x.f,
+        origen: x.o, cuenta_id: x.cta || null, alta: x.f,
         categoria: x.cat || 'A confirmar', pista: x.pista || null, tipo_origen: x.tipo || null,
         etapa: x.et || 'Cargado', archivo: x.arch || null }).select().single();
       if (error) throw error;
@@ -124,9 +124,16 @@ const DB = {
     if (this.modo === 'vivo') {
       await this.sb.from('contacto').update({
         nombre: c.n, rol: c.r, institucion: c.i, email: c.mail, telefono: c.tel,
-        categoria: c.cat, tipo_origen: c.tipo, etapa: c.et, consentimiento: c.cons,
+        categoria: c.cat, tipo_origen: c.tipo, etapa: c.et,
         cuenta_id: c.cta || null }).eq('id', id);
     }
+    this.guardarLocal();
+  },
+
+  async borrarContactos(ids) {
+    if (this.modo === 'vivo') await this.sb.from('contacto').delete().in('id', ids);
+    const fuera = new Set(ids);
+    CONTACTOS = CONTACTOS.filter(c => !fuera.has(c.id));
     this.guardarLocal();
   },
 

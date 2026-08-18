@@ -313,7 +313,7 @@ dialog.wide{max-width:560px}
  .side{position:fixed;top:0;left:0;bottom:0;width:264px;z-index:50;height:100vh;
   transform:translateX(-100%);transition:transform .26s cubic-bezier(.4,0,.2,1);overflow-y:auto;box-shadow:var(--sh-lg)}
  body.menu-on .side{transform:none}
- .main{padding:18px 16px calc(96px + env(safe-area-inset-bottom))}
+ .main{padding:18px 16px calc(96px + env(safe-area-inset-bottom));min-width:0;overflow-x:hidden}
  .top{margin-bottom:18px;gap:12px}
  .top h1{font-size:23px}
  .top .acento{margin:8px 0 6px}
@@ -357,7 +357,10 @@ dialog.wide{max-width:560px}
   border:1px solid var(--border);border-radius:14px;margin-bottom:10px;
   background:var(--surface);padding:12px 14px 13px}
  tbody tr:hover{background:var(--surface)}
- td{display:block;border:none;padding:5px 0;text-align:left;font-size:13.5px;line-height:1.35}
+ /* los mails largos no tienen dónde cortar y estiran la tarjeta */
+ td{display:block;border:none;padding:5px 0;text-align:left;font-size:13.5px;line-height:1.35;
+  overflow-wrap:anywhere;min-width:0}
+ tr{min-width:0}
  td::before{content:attr(data-l);display:block;font-size:9.5px;text-transform:uppercase;
   letter-spacing:.1em;color:var(--cian);font-weight:700;margin-bottom:1px}
  td[data-l=""]::before{display:none}
@@ -420,3 +423,59 @@ dialog.wide{max-width:560px}
  font-size:13px;color:var(--gris);margin-bottom:5px}
 .segtop b{color:var(--navy);font-variant-numeric:tabular-nums}
 .segrow .bar{height:6px}
+
+/* ==========================================================
+   BASE DE CONTACTOS — buscar, filtrar, seleccionar
+   ========================================================== */
+.barra{display:flex;gap:10px;align-items:center;margin:0 0 12px;flex-wrap:wrap}
+.buscador{flex:1;min-width:220px;border:1px solid var(--border);background:var(--surface);
+ border-radius:999px;padding:10px 16px;color:var(--navy);box-shadow:var(--sh-sm);outline:none}
+.buscador::placeholder{color:var(--ink-3)}
+.buscador:focus{border-color:var(--cian);box-shadow:0 0 0 3px rgba(43,164,217,.14)}
+.barra select{min-width:190px;max-width:280px}
+
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}
+.chip{border:1px solid rgba(23,194,110,.3);background:var(--verde-050);color:var(--navy);
+ font-size:12px;font-weight:500;padding:5px 12px;border-radius:999px;cursor:pointer;
+ display:inline-flex;align-items:center;gap:7px;transition:background .14s}
+.chip:hover{background:#D8F3E5}
+.chip span{color:var(--ink-3);font-size:11px}
+.chip.lim{background:none;border-color:var(--border);color:var(--ink-3)}
+.chip.lim:hover{background:var(--celeste)}
+
+.lotebar{display:none;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+ background:var(--celeste);border:1px solid rgba(43,164,217,.24);border-radius:var(--r-sm);
+ padding:11px 14px;margin-bottom:14px;font-size:13px;color:var(--gris)}
+.lotebar.on{display:flex}
+.lotebar b{color:var(--navy);font-size:15px}
+.lotebar .btn{padding:6px 12px;font-size:12.5px}
+.lotebar .btnrow{width:auto}
+
+.thsort{background:none;border:none;padding:0;font:inherit;color:inherit;cursor:pointer;
+ letter-spacing:inherit;text-transform:inherit;white-space:nowrap}
+.thsort:hover{color:var(--navy)}
+.thsort.on{color:var(--navy)}
+th.sel,td.sel{width:34px;padding-left:14px;padding-right:0}
+td.sel input,th.sel input{width:15px;height:15px;accent-color:var(--verde);cursor:pointer}
+
+.fnota{margin:0;font-size:13px;color:var(--gris);line-height:1.5;background:var(--celeste);
+ border-radius:var(--r-sm);padding:12px 14px}
+
+/* ---------- instituciones ---------- */
+.instrow{padding:10px;border-radius:var(--r-sm);cursor:pointer;transition:background .14s}
+.instrow:hover{background:var(--celeste)}
+.bar.comp{display:flex;gap:2px;background:transparent}
+.bar.comp>i{border-radius:2px}
+.bar.comp>i:first-child{border-radius:999px 2px 2px 999px}
+.bar.comp>i:last-child{border-radius:2px 999px 999px 2px}
+
+@media (max-width:760px){
+ /* la casilla de selección va arriba de todo en la tarjeta */
+ td.sel{grid-column:1 / -1;padding:0 0 6px}
+ td.sel::before{content:attr(data-l) " ";display:inline}
+ .barra{flex-direction:column;align-items:stretch}
+ /* el select toma su ancho de la opción más larga: hay que atarlo o desborda */
+ .barra select,.buscador{width:100%;min-width:0;max-width:100%}
+ .lotebar{flex-direction:column;align-items:stretch}
+ .lotebar .btnrow{width:100%}
+}

@@ -49,7 +49,6 @@ var CATEGORIAS=['A confirmar','Estudiante','Docente','Profesional'];
 var TIPOS_ORIGEN=['Académico','Asistencial','Digital','Comercial'];
 /* Cómo se mueve el contacto. Cada paso lo dispara un hecho, no una intención. */
 var ETAPAS=['Cargado','Contactado','Declaró categoría','Interactuó','Cuenta abierta'];
-var CONSENTIMIENTO=['Pendiente','Otorgado','Baja'];
 
 var P=id=>PROD.find(x=>x.id===id);
 var C=id=>CUENTAS.find(x=>x.id===id);

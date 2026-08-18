@@ -72,6 +72,7 @@ function modal({titulo,campos,ok='Guardar',onOk,ancho}){
 }
 function campoHTML(c){
  if(c.t==='sep')return `<p class="fsep">${esc(c.l)}</p>`;
+ if(c.t==='nota')return `<p class="fnota">${esc(c.ph||'')}</p>`;
  const w=c.half?'half':'';
  let inner;
  if(c.t==='select')inner=`<select id="f_${c.k}">${c.opts.map(o=>{
@@ -147,9 +148,16 @@ function barsH(rows,color){
   <div class="bar"><i style="width:${(r.v/max*100).toFixed(1)}%;background:${color||'var(--s1)'}"></i></div></div>`).join('');
 }
 /* tabla que en el celular se convierte en tarjetas */
-function tbl(cols,filas){
- return `<div class="tw"><table><thead><tr>${cols.map(c=>`<th${c.n?' class="num"':''}>${esc(c.t)}</th>`).join('')}</tr></thead>
- <tbody>${filas.map(f=>`<tr>${f.map((c,i)=>{const k=[cols[i].n?'num':'',i===0?'tit':''].filter(Boolean).join(' ');
+function tbl(cols,filas,ord){
+ const th=c=>{
+  const cls=[c.n?'num':'',c.s?'sel':''].filter(Boolean).join(' ');
+  if(c.th)return `<th${cls?` class="${cls}"`:''}>${c.th}</th>`;
+  if(!ord||!c.k)return `<th${cls?` class="${cls}"`:''}>${esc(c.t)}</th>`;
+  const act=ord.k===c.k, fl=act?(ord.asc?' ↑':' ↓'):'';
+  return `<th${cls?` class="${cls}"`:''}><button class="thsort${act?' on':''}" onclick="${ord.fn}('${c.k}')">${esc(c.t)}${fl}</button></th>`;
+ };
+ return `<div class="tw"><table><thead><tr>${cols.map(th).join('')}</tr></thead>
+ <tbody>${filas.map(f=>`<tr>${f.map((c,i)=>{const k=[cols[i].n?'num':'',i===0&&!cols[0].s?'tit':'',cols[i].s?'sel':'',i===1&&cols[0].s?'tit':''].filter(Boolean).join(' ');
   return `<td${k?` class="${k}"`:''} data-l="${esc(cols[i].t)}">${c}</td>`;}).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function vacio(txt,btn){
@@ -187,8 +195,6 @@ function camposContacto(c){
    hint:'De dónde salió el dato. No se cambia después.'},
   {k:'f',l:'Fecha de alta',t:'date',val:c?.f||hoy(),half:true},
   {k:'et',l:'Etapa',t:'select',val:c?.et||'Cargado',opts:ETAPAS.map(x=>({v:x,t:x})),half:true},
-  {k:'cons',l:'Consentimiento',t:'select',val:(c?.cons===true?'Otorgado':c?.cons)||'Pendiente',
-   opts:CONSENTIMIENTO.map(x=>({v:x,t:x})),half:true,hint:'Sin "Otorgado" no entra en ningún envío (Ley 25.326).'},
   {k:'cta',l:'Cuenta vinculada',t:'select',val:c?.cta||'',opts:[{v:'',t:'Sin vincular'},...CUENTAS.map(x=>({v:x.id,t:x.n}))],half:true}];
 }
 function nuevoContacto(){
@@ -535,105 +541,238 @@ V.acciones=()=>{
  </div>`;
 };
 
-/* filtros de la base: viven en memoria, no se guardan */
-var FB={cat:'',org:'',et:''};
-function filtroBase(k,v){FB[k]=v;render();}
-function limpiarFiltros(){FB={cat:'',org:'',et:''};render();}
+/* Estado de la vista de contactos. Vive en memoria: filtrar no cambia el dato. */
+var FB={cat:'',org:'',et:'',inst:'',q:'',k:'n',asc:true,sel:new Set()};
 const catDe=c=>c.cat||'A confirmar';
 const etapaDe=c=>c.et||'Cargado';
-const consDe=c=>c.cons===true?'Otorgado':(c.cons||'Pendiente');
+
+function filtroBase(k,v){FB[k]=FB[k]===v?'':v;FB.sel.clear();render();}
+function limpiarFiltros(){FB.cat=FB.org=FB.et=FB.inst=FB.q='';FB.sel.clear();render();}
+function ordenarBase(k){if(FB.k===k)FB.asc=!FB.asc;else{FB.k=k;FB.asc=true;}render();}
+function buscarBase(v){FB.q=v;FB.sel.clear();render();
+ const i=$('#qBase');if(i){i.focus();i.setSelectionRange(v.length,v.length);}}
+
+function contactosFiltrados(){
+ const q=SHEET.norm(FB.q);
+ let l=CONTACTOS.filter(c=>
+  (!FB.cat||catDe(c)===FB.cat)&&
+  (!FB.org||(c.o||'Sin origen')===FB.org)&&
+  (!FB.et||etapaDe(c)===FB.et)&&
+  (!FB.inst||c.cta===FB.inst)&&
+  (!q||[c.n,c.mail,c.i,c.r,c.tel,c.o].some(x=>SHEET.norm(x).includes(q))));
+ const val=c=>({n:c.n,i:C(c.cta)?.n||c.i||'',cat:catDe(c),o:c.o||'',et:ETAPAS.indexOf(etapaDe(c)),f:c.f||''})[FB.k];
+ l.sort((x,y)=>{const a=val(x),b=val(y);
+  const r=typeof a==='number'?a-b:String(a).localeCompare(String(b),'es');
+  return FB.asc?r:-r;});
+ return l;
+}
+
+/* ---- selección y acciones en lote ---- */
+function selUno(id,ok){ok?FB.sel.add(id):FB.sel.delete(id);pintarLote();}
+function selTodos(ok){const l=contactosFiltrados();
+ if(ok)l.forEach(c=>FB.sel.add(c.id));else l.forEach(c=>FB.sel.delete(c.id));render();}
+function pintarLote(){
+ const bar=$('#lote'); if(!bar)return;
+ bar.classList.toggle('on',FB.sel.size>0);
+ const n=$('#loteN'); if(n)n.textContent=FB.sel.size;
+ const t=$('#selTodo'); if(t){const l=contactosFiltrados();
+  t.checked=l.length>0&&l.every(c=>FB.sel.has(c.id));}
+}
+function loteCampo(campo){
+ const opts=campo==='cat'?CATEGORIAS:campo==='et'?ETAPAS
+   :[{v:'',t:'Sin vincular'},...CUENTAS.map(c=>({v:c.id,t:c.n}))];
+ const titulo=campo==='cat'?'Cambiar categoría':campo==='et'?'Mover de etapa':'Asignar institución';
+ modal({titulo:`${titulo} · ${FB.sel.size} contacto(s)`,ok:'Aplicar',campos:[
+  {k:'v',l:titulo,t:'select',opts:Array.isArray(opts)&&typeof opts[0]==='string'?opts.map(x=>({v:x,t:x})):opts,req:campo!=='cta'}],
+  onOk:async v=>{const val=campo==='cta'?(v.v?+v.v:null):v.v;
+   for(const id of FB.sel)await DB.updContacto(id,{[campo]:val});
+   toast(`${FB.sel.size} contacto(s) actualizados.`,'ok');FB.sel.clear();render();}});
+}
+function loteBorrar(){
+ const n=FB.sel.size;
+ modal({titulo:`Borrar ${n} contacto(s)`,ok:'Sí, borrar',campos:[
+  {k:'x',l:'',t:'nota',ph:`Se eliminan ${n} contactos de la base. No se puede deshacer desde acá: si te arrepentís, se recupera del respaldo.`}],
+  onOk:async()=>{await DB.borrarContactos([...FB.sel]);toast(`${n} contacto(s) borrados.`);FB.sel.clear();render();}});
+}
+function exportarFiltrado(){
+ const l=contactosFiltrados();
+ dl(`nucleo_contactos_${l.length}.csv`,
+  [['Nombre','Email','Telefono','Categoria','Profesion','Institucion','Origen','TipoOrigen','FechaAlta','Etapa'],
+  ...l.map(c=>[c.n,c.mail||'',c.tel||'',catDe(c),c.r||'',C(c.cta)?.n||c.i||'',c.o||'',c.tipo||'',c.f||'',etapaDe(c)])]);
+ toast(`${l.length} contacto(s) exportados.`,'ok');
+}
 
 V.base=()=>{
  const T=CONTACTOS.length;
- /* de dónde salió cada dato: agrupado por origen, que es el hecho duro */
+ if(!T) return `<div class="card">${vacio('La base está vacía. Importá el archivo de las jornadas y clases, o cargá un contacto a mano.',{t:'↥ Importar CSV',fn:"$('#csvIn').click()"})}</div>`;
+
  const fuentes=[];
  CONTACTOS.forEach(c=>{
   const k=c.o||'Sin origen';
   let f=fuentes.find(x=>x.k===k);
-  if(!f){f={k,inst:c.i||'',tipo:c.tipo||'',f:c.f||'',n:0,dec:0,cons:0,arch:c.arch||''};fuentes.push(f);}
-  f.n++; if(catDe(c)!=='A confirmar')f.dec++; if(consDe(c)==='Otorgado')f.cons++;
+  if(!f){f={k,tipo:c.tipo||'',f:c.f||'',n:0,dec:0,tel:0,arch:c.arch||''};fuentes.push(f);}
+  f.n++; if(catDe(c)!=='A confirmar')f.dec++; if(c.tel)f.tel++;
   if(c.f&&(!f.f||c.f<f.f))f.f=c.f;
  });
  fuentes.sort((a,b)=>b.n-a.n);
 
  const porCat=CATEGORIAS.map(k=>({k,n:CONTACTOS.filter(c=>catDe(c)===k).length}));
  const porEtapa=ETAPAS.map(k=>({k,n:CONTACTOS.filter(c=>etapaDe(c)===k).length}));
- const decl=T-porCat[0].n;
- const conCons=CONTACTOS.filter(c=>consDe(c)==='Otorgado').length;
- const bajas=CONTACTOS.filter(c=>consDe(c)==='Baja').length;
-
- /* la tabla respeta los filtros de arriba */
- const lista=CONTACTOS.filter(c=>
-   (!FB.cat||catDe(c)===FB.cat)&&(!FB.org||(c.o||'Sin origen')===FB.org)&&(!FB.et||etapaDe(c)===FB.et));
- const hayFiltro=FB.cat||FB.org||FB.et;
-
- if(!T) return `<div class="card">${vacio('La base está vacía. Importá el archivo consolidado de las jornadas y clases, o cargá un contacto a mano.',{t:'↥ Importar CSV',fn:"$('#csvIn').click()"})}</div>`;
+ const decl=T-porCat[0].n, conTel=CONTACTOS.filter(c=>c.tel).length;
+ const lista=contactosFiltrados();
+ const chips=[
+  FB.q?{t:`«${FB.q}»`,f:"buscarBase('')"}:null,
+  FB.cat?{t:FB.cat,f:`filtroBase('cat','${FB.cat}')`}:null,
+  FB.org?{t:FB.org,f:`filtroBase('org','${esc(FB.org)}')`}:null,
+  FB.et?{t:FB.et,f:`filtroBase('et','${FB.et}')`}:null,
+  FB.inst?{t:C(FB.inst)?.n||'Institución',f:`filtroBase('inst',${FB.inst})`}:null,
+ ].filter(Boolean);
 
  return `<div class="card" style="margin-bottom:16px">
   <div class="chead"><div><h3>Base unificada de contactos</h3>
    <p class="sub">Universidades, jornadas y hospitales en un solo lugar, con el origen de cada dato</p></div>
    <div class="btnrow"><button class="btn" onclick="$('#csvIn').click()">↥ Importar CSV</button>
-   <button class="btn" onclick="exportBase()">↧ Exportar</button>
    <button class="btn pri" onclick="nuevoContacto()">+ Nuevo contacto</button></div></div>
   <div class="grid g4">
    <div class="card tile" style="padding:16px"><div class="lbl">Contactos</div><div class="val" style="font-size:24px">${T}</div>
     <div class="dlt">${fuentes.length} orígenes</div></div>
    <div class="card tile" style="padding:16px"><div class="lbl">Categoría declarada</div><div class="val" style="font-size:24px">${decl}</div>
-    <div class="dlt">${T?(decl/T*100).toFixed(0):0}% de la base</div></div>
-   <div class="card tile" style="padding:16px"><div class="lbl">Con consentimiento</div>
-    <div class="val" style="font-size:24px;color:${conCons?'var(--good)':'var(--serious)'}">${conCons}</div>
-    <div class="dlt">${bajas?bajas+' baja(s)':'requisito para enviar'}</div></div>
-   <div class="card tile" style="padding:16px"><div class="lbl">Instituciones alcanzadas</div>
+    <div class="dlt">${(decl/T*100).toFixed(0)}% de la base</div></div>
+   <div class="card tile" style="padding:16px"><div class="lbl">Con teléfono</div><div class="val" style="font-size:24px">${conTel}</div>
+    <div class="dlt">${(conTel/T*100).toFixed(0)}% alcanzable por WhatsApp</div></div>
+   <div class="card tile" style="padding:16px"><div class="lbl">Instituciones</div>
     <div class="val" style="font-size:24px">${new Set(CONTACTOS.map(c=>c.cta).filter(Boolean)).size}</div>
     <div class="dlt">${CONTACTOS.filter(c=>c.cta).length} contactos vinculados</div></div>
   </div>
  </div>
 
  <div class="grid g2" style="margin-bottom:16px">
-  <div class="card"><h3>Segmentos</h3><p class="sub">La categoría la declara la persona. Tocá un segmento para filtrar la lista.</p>
-   ${porCat.map(x=>{const pct=T?x.n/T*100:0;const col=x.k==='A confirmar'?'var(--ink-3)':'var(--s1)';
-    return `<div class="segrow${FB.cat===x.k?' on':''}" onclick="filtroBase('cat','${FB.cat===x.k?'':x.k}')">
+  <div class="card"><h3>Segmentos</h3><p class="sub">La categoría la declara la persona. Tocá un segmento para filtrar.</p>
+   ${porCat.map(x=>{const pct=x.n/T*100,col=x.k==='A confirmar'?'var(--ink-3)':'var(--s1)';
+    return `<div class="segrow${FB.cat===x.k?' on':''}" onclick="filtroBase('cat','${x.k}')">
      <div class="segtop"><span>${x.k}</span><b>${x.n}</b></div>
      <div class="bar"><i style="width:${pct.toFixed(1)}%;background:${col}"></i></div></div>`}).join('')}
    ${porCat[0].n?`<p class="src">Los ${porCat[0].n} "a confirmar" no se completan a dedo: la categoría entra sola cuando la persona responde el primer mensaje.</p>`:''}
   </div>
   <div class="card"><h3>Cómo se mueve la base</h3><p class="sub">Cada paso lo dispara un hecho, no una intención</p>
-   ${porEtapa.map(x=>{const pct=T?x.n/T*100:0;
-    return `<div class="segrow${FB.et===x.k?' on':''}" onclick="filtroBase('et','${FB.et===x.k?'':x.k}')">
+   ${porEtapa.map(x=>`<div class="segrow${FB.et===x.k?' on':''}" onclick="filtroBase('et','${x.k}')">
      <div class="segtop"><span>${x.k}</span><b>${x.n}</b></div>
-     <div class="bar"><i style="width:${pct.toFixed(1)}%;background:var(--s3)"></i></div></div>`}).join('')}
+     <div class="bar"><i style="width:${(x.n/T*100).toFixed(1)}%;background:var(--s3)"></i></div></div>`).join('')}
    <p class="src">Cargado → Contactado (salió el mensaje) → Declaró categoría (respondió) → Interactuó (descargó o pidió algo) → Cuenta abierta.</p>
   </div>
  </div>
 
  <div class="card" style="margin-bottom:16px"><h3>Origen del dato</h3>
   <p class="sub">De dónde salió cada contacto y qué archivo lo trajo</p>
-  ${tbl([{t:'Origen'},{t:'Institución'},{t:'Tipo'},{t:'Desde'},{t:'Contactos',n:1},{t:'Declarados',n:1},{t:'Consienten',n:1}],
+  ${tbl([{t:'Origen'},{t:'Tipo'},{t:'Desde'},{t:'Contactos',n:1},{t:'Declarados',n:1},{t:'Con teléfono',n:1}],
    fuentes.map(f=>[`<b>${esc(f.k)}</b>${f.arch?`<div class="mini">${esc(f.arch)}</div>`:''}`,
-    esc(f.inst||'—'),f.tipo?`<span class="tag">${esc(f.tipo)}</span>`:'—',fmtF(f.f),
+    f.tipo?`<span class="tag">${esc(f.tipo)}</span>`:'<span class="mini">sin definir</span>',fmtF(f.f),
     `<a href="#" onclick="filtroBase('org','${esc(f.k)}');return false">${f.n}</a>`,
-    f.dec||'<span class="mini">—</span>',f.cons||'<span class="mini">—</span>']))}
-  <p class="src">El origen no se edita: es la trazabilidad del dato. Si un contacto aparece en dos listas, queda con el origen más antiguo.</p>
+    f.dec||'<span class="mini">—</span>',f.tel||'<span class="mini">—</span>']))}
+  <p class="src">El origen no se edita: es la trazabilidad del dato.</p>
  </div>
 
- <div class="card"><div class="chead"><div><h3>Contactos</h3>
-   <p class="sub">${hayFiltro?`${lista.length} de ${T} registros · filtro activo`:`${T} registros`}</p></div>
-   ${hayFiltro?'<button class="btn" onclick="limpiarFiltros()">Quitar filtros</button>':''}</div>
- ${lista.length?tbl([{t:'Nombre'},{t:'Categoría'},{t:'Origen'},{t:'Contacto'},{t:'Etapa'},{t:'Consent.'},{t:'Cuenta'},{t:''}],
+ <div class="card">
+  <div class="chead"><div><h3>Contactos</h3>
+   <p class="sub">${lista.length===T?`${T} registros`:`${lista.length} de ${T} registros`}</p></div>
+   <div class="btnrow"><button class="btn" onclick="exportarFiltrado()">↧ Exportar ${lista.length===T?'todo':'lo filtrado'}</button></div></div>
+
+  <div class="barra">
+   <input id="qBase" class="buscador" type="search" placeholder="Buscar por nombre, mail, institución o teléfono…"
+    value="${esc(FB.q)}" oninput="buscarBase(this.value)">
+   <select class="btn" onchange="filtroBase('inst',this.value?+this.value:'')">
+    <option value="">Todas las instituciones</option>
+    ${CUENTAS.filter(c=>CONTACTOS.some(x=>x.cta===c.id)).sort((a,b)=>a.n.localeCompare(b.n,'es'))
+      .map(c=>`<option value="${c.id}"${FB.inst===c.id?' selected':''}>${esc(c.n)}</option>`).join('')}
+   </select>
+  </div>
+  ${chips.length?`<div class="chips">${chips.map(c=>`<button class="chip" onclick="${c.f}">${esc(c.t)} <span>✕</span></button>`).join('')}
+   <button class="chip lim" onclick="limpiarFiltros()">Quitar todo</button></div>`:''}
+
+  <div class="lotebar${FB.sel.size?' on':''}" id="lote">
+   <span><b id="loteN">${FB.sel.size}</b> seleccionados</span>
+   <div class="btnrow">
+    <button class="btn" onclick="loteCampo('cat')">Categoría</button>
+    <button class="btn" onclick="loteCampo('et')">Etapa</button>
+    <button class="btn" onclick="loteCampo('cta')">Institución</button>
+    <button class="btn" onclick="loteBorrar()">Borrar</button>
+    <button class="btn" onclick="FB.sel.clear();render()">Deseleccionar</button></div>
+  </div>
+
+ ${lista.length?tbl([
+   {t:'',s:1,th:`<input type="checkbox" id="selTodo" onchange="selTodos(this.checked)"${lista.length&&lista.every(c=>FB.sel.has(c.id))?' checked':''} aria-label="Seleccionar todos">`},{t:'Nombre',k:'n'},{t:'Categoría',k:'cat'},{t:'Institución',k:'i'},
+   {t:'Contacto'},{t:'Origen',k:'o'},{t:'Etapa',k:'et'},{t:''}],
   lista.map(c=>{const cat=catDe(c),pend=cat==='A confirmar';
-   return [`<b>${esc(c.n)}</b>${c.r?`<div class="mini">${esc(c.r)}</div>`:''}`,
+   return [`<input type="checkbox" onchange="selUno(${c.id},this.checked)"${FB.sel.has(c.id)?' checked':''} aria-label="Seleccionar">`,
+   `<b>${esc(c.n)}</b>${c.r?`<div class="mini">${esc(c.r)}</div>`:''}`,
    pend?`<span class="tag">${cat}</span>${c.pista?`<div class="mini">parece ${esc(c.pista).toLowerCase()}</div>`:''}`
        :`<span class="tag t-good"><span class="d"></span>${esc(cat)}</span>`,
-   `${esc(c.o||'—')}${c.i?`<div class="mini">${esc(c.i)}</div>`:''}`,
+   esc(C(c.cta)?.n||c.i||'—'),
    `<span class="mini">${esc(c.mail||'')}${c.tel?'<br>'+esc(c.tel):''}</span>`,
-   esc(etapaDe(c)),
-   consDe(c)==='Otorgado'?'<span class="tag t-good"><span class="d"></span>Sí</span>'
-    :consDe(c)==='Baja'?'<span class="tag t-crit"><span class="d"></span>Baja</span>'
-    :'<span class="mini">pendiente</span>',
-   c.cta?esc(C(c.cta)?.n||''):'<span class="mini">sin vincular</span>',
-   `<a href="#" onclick="editarContacto(${c.id});return false">editar</a>`];}))
-  :vacio('Ningún contacto cumple el filtro.')}
- <p class="src">Ley 25.326: cada contacto guarda de dónde salió y si dio consentimiento. Sin consentimiento otorgado no entra en un envío.</p></div>`;
+   esc(c.o||'—'),esc(etapaDe(c)),
+   `<a href="#" onclick="editarContacto(${c.id});return false">editar</a>`];}),
+  {k:FB.k,asc:FB.asc,fn:'ordenarBase'})
+  :vacio('Ningún contacto cumple el filtro.',{t:'Quitar filtros',fn:'limpiarFiltros()'})}
+ </div>`;
+};
+
+V.instituciones=()=>{
+ const g=[];
+ CONTACTOS.forEach(c=>{
+  const cta=C(c.cta), k=cta?cta.id:('_'+(c.i||'Sin institución'));
+  let x=g.find(y=>y.k===k);
+  if(!x){x={k,id:cta?cta.id:null,n:cta?cta.n:(c.i||'Sin institución'),t:cta?cta.t:'',
+    n_:0,prof:0,est:0,doc:0,pend:0,tel:0,desde:c.f||'',orig:new Set()};g.push(x);}
+  x.n_++; const cat=catDe(c);
+  if(cat==='Profesional')x.prof++;else if(cat==='Estudiante')x.est++;
+  else if(cat==='Docente')x.doc++;else x.pend++;
+  if(c.tel)x.tel++;
+  if(c.o)x.orig.add(c.o);
+  if(c.f&&(!x.desde||c.f<x.desde))x.desde=c.f;
+ });
+ g.sort((a,b)=>b.n_-a.n_);
+ const max=g.length?g[0].n_:1;
+ const conVenta=g.filter(x=>x.id&&VENTAS.some(v=>v.c===x.id)).length;
+
+ if(!g.length)return `<div class="card">${vacio('Todavía no hay instituciones. Se crean solas al importar contactos con el campo Institución.')}</div>`;
+
+ return `<div class="grid g4" style="margin-bottom:16px">
+  <div class="card tile"><div class="lbl">Instituciones</div><div class="val">${g.length}</div>
+   <div class="dlt">con al menos un contacto</div></div>
+  <div class="card tile"><div class="lbl">Contactos alcanzados</div><div class="val">${CONTACTOS.length}</div>
+   <div class="dlt">promedio ${(CONTACTOS.length/g.length).toFixed(1)} por institución</div></div>
+  <div class="card tile"><div class="lbl">Con actividad comercial</div>
+   <div class="val" style="color:${conVenta?'var(--good)':'var(--ink-3)'}">${conVenta}</div>
+   <div class="dlt">${conVenta?'ya compraron':'ninguna compró todavía'}</div></div>
+  <div class="card tile"><div class="lbl">Institución más grande</div><div class="val" style="font-size:22px">${g[0].n_}</div>
+   <div class="dlt">${esc(g[0].n)}</div></div>
+ </div>
+
+ <div class="card" style="margin-bottom:16px"><h3>Presencia por institución</h3>
+  <p class="sub">Cuántos contactos tenemos en cada una y cómo se componen</p>
+  ${g.slice(0,12).map(x=>`<div class="instrow" onclick="FB.inst=${x.id||"''"};ir('base')">
+   <div class="segtop"><span>${esc(x.n)}</span><b>${x.n_}</b></div>
+   <div class="bar comp">
+    ${x.prof?`<i style="width:${x.prof/max*100}%;background:var(--s1)" title="Profesionales"></i>`:''}
+    ${x.est?`<i style="width:${x.est/max*100}%;background:var(--s3)" title="Estudiantes"></i>`:''}
+    ${x.doc?`<i style="width:${x.doc/max*100}%;background:var(--s2)" title="Docentes"></i>`:''}
+    ${x.pend?`<i style="width:${x.pend/max*100}%;background:var(--grid)" title="A confirmar"></i>`:''}
+   </div></div>`).join('')}
+  <div class="legend"><span><i style="background:var(--s1)"></i>Profesionales</span>
+   <span><i style="background:var(--s3)"></i>Estudiantes</span>
+   <span><i style="background:var(--s2)"></i>Docentes</span>
+   <span><i style="background:var(--grid)"></i>A confirmar</span></div>
+ </div>
+
+ <div class="card"><h3>Detalle</h3><p class="sub">Tocá una fila para ver sus contactos</p>
+ ${tbl([{t:'Institución'},{t:'Contactos',n:1},{t:'Profesionales',n:1},{t:'Estudiantes',n:1},
+    {t:'A confirmar',n:1},{t:'Con teléfono',n:1},{t:'Desde'},{t:'Orígenes'}],
+  g.map(x=>[`<b>${esc(x.n)}</b>${x.t?`<div class="mini">${esc(x.t)}</div>`:''}`,
+   x.id?`<a href="#" onclick="FB.inst=${x.id};ir('base');return false">${x.n_}</a>`:x.n_,
+   x.prof||'<span class="mini">—</span>',x.est||'<span class="mini">—</span>',
+   x.pend||'<span class="mini">—</span>',x.tel||'<span class="mini">—</span>',fmtF(x.desde),
+   [...x.orig].map(o=>`<span class="tag">${esc(o)}</span>`).join(' ')||'<span class="mini">—</span>']))}
+ <p class="src">Una institución aparece acá apenas tiene un contacto. Que aparezca no significa que sea cliente: eso se ve en Cuentas.</p></div>`;
 };
 
 V.reportes=()=>{
@@ -669,8 +808,8 @@ function bajar(name,blob){const a=document.createElement('a');a.href=URL.createO
 function exportVentas(){dl(`nucleo_ventas_${MESES[MES]}_${AÑO}.csv`,[['Fecha','Cuenta','Tipo','Zona','Producto','Presentacion','Categoria','Unidades','Precio unitario','Total','Origen'],
  ...ventasMes(MES).map(v=>[v.f,C(v.c)?.n,C(v.c)?.t,C(v.c)?.z,P(v.p)?.n,P(v.p)?.pres,P(v.p)?.cat,v.u,v.pu,v.u*v.pu,v.o])]);}
 function exportBase(){dl('nucleo_contactos.csv',
- [['Nombre','Email','Telefono','Categoria','Pista','Profesion','Origen','Institucion','TipoOrigen','FechaAlta','Archivo','Etapa','Consentimiento','Cuenta'],
- ...CONTACTOS.map(c=>[c.n,c.mail,c.tel,catDe(c),c.pista||'',c.r||'',c.o||'',c.i||'',c.tipo||'',c.f||'',c.arch||'',etapaDe(c),consDe(c),c.cta?C(c.cta)?.n:''])]);}
+ [['Nombre','Email','Telefono','Categoria','Pista','Profesion','Origen','Institucion','TipoOrigen','FechaAlta','Archivo','Etapa','Cuenta'],
+ ...CONTACTOS.map(c=>[c.n,c.mail,c.tel,catDe(c),c.pista||'',c.r||'',c.o||'',c.i||'',c.tipo||'',c.f||'',c.arch||'',etapaDe(c),c.cta?C(c.cta)?.n:''])]);}
 function exportStock(){dl(`nucleo_stock_valorizado_${MESES[MES]}_${AÑO}.csv`,
  [['Producto','Presentacion','Categoria','Lote','Unidades','Costo unitario','Valorizado a costo','Precio de lista','Valorizado a venta','Vencimiento','Dias','Estado'],
  ...LOTES.map(l=>({l,d:diasA(l.v)})).sort((a,b)=>a.d-b.d).map(r=>{const[,t]=nivelVto(r.d);
@@ -693,7 +832,7 @@ function importarCSV(file){
   const iN=col('nombre','apellido'),iM=col('mail','correo','email'),iT=col('tel','cel','whats'),
    iR=col('profesion','rol','cargo'),iI=col('institucion','instituci','hospital','universidad','empresa'),
    iC=col('categoria','segmento'),iO=col('origen','fuente','accion'),iTO=col('tipoorigen','tipo de origen','tipo'),
-   iF=col('fechaalta','fecha'),iA=col('archivo'),iP=col('pista'),iCo=col('consent');
+   iF=col('fechaalta','fecha'),iA=col('archivo'),iP=col('pista');
   if(iN<0)return toast('No encontré la columna Nombre.','err');
   if(iM<0&&iT<0)return toast('El archivo no trae ni mail ni teléfono: así no sirve para contactar.','err');
 
@@ -734,9 +873,7 @@ function importarCSV(file){
     cat,pista:val(r,iP),
     o:val(r,iO)||'Importado',tipo:TIPOS_ORIGEN.includes(val(r,iTO))?val(r,iTO):'',
     arch:val(r,iA)||file.name.replace(/\.csv$/i,''),
-    f:val(r,iF)||hoy(),et:'Cargado',
-    cons:CONSENTIMIENTO.includes(val(r,iCo))?val(r,iCo):'Pendiente',
-    cta:ctaId});
+    f:val(r,iF)||hoy(),et:'Cargado',cta:ctaId});
    nuevos++;
   }
   toast(`${nuevos} contactos nuevos${ctasNuevas?` · ${ctasNuevas} institución(es) dada(s) de alta`:''}.`,'ok');
@@ -756,6 +893,7 @@ const TIT={panel:['Panel <em>comercial</em>','Vista general de la línea'],
  tienda:['Tienda <em>online</em>','Canal ecommerce y su trazabilidad'],
  acciones:['Acciones de <em>marketing</em>','Trazabilidad hacia la venta'],
  base:['Base de <em>datos</em>','Contactos unificados por origen'],
+ instituciones:['<em>Instituciones</em>','Dónde tenemos presencia real'],
  reportes:['<em>Reportes</em>','Exportación mensual']};
 let VISTA='panel';
 function ir(v){VISTA=v;document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
