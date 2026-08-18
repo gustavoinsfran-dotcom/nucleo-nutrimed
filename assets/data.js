@@ -41,6 +41,16 @@ var TIPOS_CUENTA=['Institución','Farmacia','Distribuidor','Profesional'];
 var ORIGENES_VENTA=['Visita en campo','Recompra','Acción de marketing','Inbound institucional','Licitación'];
 var TIPOS_ACCION=['Jornada','Académica','Institucional','Campo','Digital','Otra'];
 
+/* ---------- base de contactos ----------
+   La CATEGORÍA la declara la persona. Mientras no lo haga queda "A confirmar":
+   no se completa por inferencia, porque de ahí salen los mensajes equivocados. */
+var CATEGORIAS=['A confirmar','Estudiante','Docente','Profesional'];
+/* De dónde salió el dato. Es lo único que sabemos con certeza desde el día uno. */
+var TIPOS_ORIGEN=['Académico','Asistencial','Digital','Comercial'];
+/* Cómo se mueve el contacto. Cada paso lo dispara un hecho, no una intención. */
+var ETAPAS=['Cargado','Contactado','Declaró categoría','Interactuó','Cuenta abierta'];
+var CONSENTIMIENTO=['Pendiente','Otorgado','Baja'];
+
 var P=id=>PROD.find(x=>x.id===id);
 var C=id=>CUENTAS.find(x=>x.id===id);
 

@@ -411,3 +411,12 @@ dialog.wide{max-width:560px}
 
 /* celdas vacías: no muestran su rótulo en la vista de tarjeta */
 @media (max-width:760px){td:empty::before{display:none}}
+
+/* ---------- segmentos de la base de contactos ---------- */
+.segrow{padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;transition:background .14s}
+.segrow:hover{background:var(--celeste)}
+.segrow.on{background:var(--verde-050);box-shadow:inset 0 0 0 1px rgba(23,194,110,.28)}
+.segtop{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+ font-size:13px;color:var(--gris);margin-bottom:5px}
+.segtop b{color:var(--navy);font-variant-numeric:tabular-nums}
+.segrow .bar{height:6px}

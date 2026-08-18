@@ -173,18 +173,32 @@ function nuevaCuenta(id){
    else{await DB.addCuenta({...v,desde:''});toast('Cuenta dada de alta.');}
    render();}});
 }
+function camposContacto(c){
+ return [
+  {k:'n',l:'Nombre y apellido',req:true,val:c?.n},
+  {k:'cat',l:'Categoría',t:'select',val:c?.cat||'A confirmar',opts:CATEGORIAS.map(x=>({v:x,t:x})),half:true,
+   hint:'Dejala en "A confirmar" si no te lo dijo la persona.'},
+  {k:'r',l:'Profesión o cargo',val:c?.r,ph:'Nutricionista, médica, geriatra, alumna…',half:true},
+  {k:'i',l:'Institución',val:c?.i,half:true},
+  {k:'tipo',l:'Tipo de origen',t:'select',val:c?.tipo||'Académico',opts:TIPOS_ORIGEN.map(x=>({v:x,t:x})),half:true},
+  {k:'mail',l:'Email',t:'email',val:c?.mail,half:true},
+  {k:'tel',l:'Teléfono',val:c?.tel,half:true},
+  {k:'o',l:'Origen',req:true,val:c?.o,ph:'Clase USAL, Hospital Militar, Sorteo de becas…',half:true,
+   hint:'De dónde salió el dato. No se cambia después.'},
+  {k:'f',l:'Fecha de alta',t:'date',val:c?.f||hoy(),half:true},
+  {k:'et',l:'Etapa',t:'select',val:c?.et||'Cargado',opts:ETAPAS.map(x=>({v:x,t:x})),half:true},
+  {k:'cons',l:'Consentimiento',t:'select',val:(c?.cons===true?'Otorgado':c?.cons)||'Pendiente',
+   opts:CONSENTIMIENTO.map(x=>({v:x,t:x})),half:true,hint:'Sin "Otorgado" no entra en ningún envío (Ley 25.326).'},
+  {k:'cta',l:'Cuenta vinculada',t:'select',val:c?.cta||'',opts:[{v:'',t:'Sin vincular'},...CUENTAS.map(x=>({v:x.id,t:x.n}))],half:true}];
+}
 function nuevoContacto(){
- modal({titulo:'Nuevo contacto',ok:'Dar de alta',campos:[
-  {k:'n',l:'Nombre y apellido',req:true},
-  {k:'r',l:'Rol',val:'Nutricionista',ph:'Nutricionista, médico, geriatra…',half:true},
-  {k:'i',l:'Institución',half:true},
-  {k:'mail',l:'Email',t:'email',half:true},
-  {k:'tel',l:'Teléfono',half:true},
-  {k:'o',l:'Origen',req:true,ph:'Jornada, universidad, sorteo, visita…',half:true},
-  {k:'cta',l:'Cuenta vinculada',t:'select',opts:[{v:'',t:'Sin vincular'},...CUENTAS.map(c=>({v:c.id,t:c.n}))],half:true},
-  {k:'f',l:'Fecha de alta',t:'date',val:hoy(),half:true},
-  {k:'cons',l:'',t:'check',ph:'Dio consentimiento para recibir comunicaciones (Ley 25.326)'}],
+ modal({titulo:'Nuevo contacto',ok:'Dar de alta',ancho:'620px',campos:camposContacto(null),
   onOk:async v=>{await DB.addContacto({...v,cta:v.cta?+v.cta:null});toast('Contacto agregado.');render();}});
+}
+function editarContacto(id){
+ const c=CONTACTOS.find(x=>x.id===id); if(!c)return;
+ modal({titulo:esc(c.n),ok:'Guardar cambios',ancho:'620px',campos:camposContacto(c),
+  onOk:async v=>{await DB.updContacto(id,{...v,cta:v.cta?+v.cta:null});toast('Contacto actualizado.');render();}});
 }
 function nuevaAccion(){
  modal({titulo:'Nueva acción de marketing',ok:'Dar de alta',campos:[
@@ -521,28 +535,105 @@ V.acciones=()=>{
  </div>`;
 };
 
+/* filtros de la base: viven en memoria, no se guardan */
+var FB={cat:'',org:'',et:''};
+function filtroBase(k,v){FB[k]=v;render();}
+function limpiarFiltros(){FB={cat:'',org:'',et:''};render();}
+const catDe=c=>c.cat||'A confirmar';
+const etapaDe=c=>c.et||'Cargado';
+const consDe=c=>c.cons===true?'Otorgado':(c.cons||'Pendiente');
+
 V.base=()=>{
- const orig=[...new Set(CONTACTOS.map(c=>c.o).filter(Boolean))];
+ const T=CONTACTOS.length;
+ /* de dónde salió cada dato: agrupado por origen, que es el hecho duro */
+ const fuentes=[];
+ CONTACTOS.forEach(c=>{
+  const k=c.o||'Sin origen';
+  let f=fuentes.find(x=>x.k===k);
+  if(!f){f={k,inst:c.i||'',tipo:c.tipo||'',f:c.f||'',n:0,dec:0,cons:0,arch:c.arch||''};fuentes.push(f);}
+  f.n++; if(catDe(c)!=='A confirmar')f.dec++; if(consDe(c)==='Otorgado')f.cons++;
+  if(c.f&&(!f.f||c.f<f.f))f.f=c.f;
+ });
+ fuentes.sort((a,b)=>b.n-a.n);
+
+ const porCat=CATEGORIAS.map(k=>({k,n:CONTACTOS.filter(c=>catDe(c)===k).length}));
+ const porEtapa=ETAPAS.map(k=>({k,n:CONTACTOS.filter(c=>etapaDe(c)===k).length}));
+ const decl=T-porCat[0].n;
+ const conCons=CONTACTOS.filter(c=>consDe(c)==='Otorgado').length;
+ const bajas=CONTACTOS.filter(c=>consDe(c)==='Baja').length;
+
+ /* la tabla respeta los filtros de arriba */
+ const lista=CONTACTOS.filter(c=>
+   (!FB.cat||catDe(c)===FB.cat)&&(!FB.org||(c.o||'Sin origen')===FB.org)&&(!FB.et||etapaDe(c)===FB.et));
+ const hayFiltro=FB.cat||FB.org||FB.et;
+
+ if(!T) return `<div class="card">${vacio('La base está vacía. Importá el archivo consolidado de las jornadas y clases, o cargá un contacto a mano.',{t:'↥ Importar CSV',fn:"$('#csvIn').click()"})}</div>`;
+
  return `<div class="card" style="margin-bottom:16px">
   <div class="chead"><div><h3>Base unificada de contactos</h3>
-   <p class="sub">Universidades, jornadas, clínicas y campañas en un solo lugar</p></div>
+   <p class="sub">Universidades, jornadas y hospitales en un solo lugar, con el origen de cada dato</p></div>
    <div class="btnrow"><button class="btn" onclick="$('#csvIn').click()">↥ Importar CSV</button>
+   <button class="btn" onclick="exportBase()">↧ Exportar</button>
    <button class="btn pri" onclick="nuevoContacto()">+ Nuevo contacto</button></div></div>
-  ${CONTACTOS.length?`<div class="grid g4">
-   <div class="card tile" style="padding:16px"><div class="lbl">Contactos</div><div class="val" style="font-size:24px">${CONTACTOS.length}</div></div>
-   <div class="card tile" style="padding:16px"><div class="lbl">Vinculados a cuenta</div><div class="val" style="font-size:24px">${CONTACTOS.filter(c=>c.cta).length}</div></div>
-   <div class="card tile" style="padding:16px"><div class="lbl">Con consentimiento</div><div class="val" style="font-size:24px">${CONTACTOS.filter(c=>c.cons).length}</div></div>
-   <div class="card tile" style="padding:16px"><div class="lbl">Orígenes</div><div class="val" style="font-size:24px">${orig.length}</div></div>
-  </div>`:''}
+  <div class="grid g4">
+   <div class="card tile" style="padding:16px"><div class="lbl">Contactos</div><div class="val" style="font-size:24px">${T}</div>
+    <div class="dlt">${fuentes.length} orígenes</div></div>
+   <div class="card tile" style="padding:16px"><div class="lbl">Categoría declarada</div><div class="val" style="font-size:24px">${decl}</div>
+    <div class="dlt">${T?(decl/T*100).toFixed(0):0}% de la base</div></div>
+   <div class="card tile" style="padding:16px"><div class="lbl">Con consentimiento</div>
+    <div class="val" style="font-size:24px;color:${conCons?'var(--good)':'var(--serious)'}">${conCons}</div>
+    <div class="dlt">${bajas?bajas+' baja(s)':'requisito para enviar'}</div></div>
+   <div class="card tile" style="padding:16px"><div class="lbl">Instituciones alcanzadas</div>
+    <div class="val" style="font-size:24px">${new Set(CONTACTOS.map(c=>c.cta).filter(Boolean)).size}</div>
+    <div class="dlt">${CONTACTOS.filter(c=>c.cta).length} contactos vinculados</div></div>
+  </div>
  </div>
- <div class="card">${CONTACTOS.length?`<h3>Contactos</h3><p class="sub">${CONTACTOS.length} registros</p>
- ${tbl([{t:'Nombre'},{t:'Rol'},{t:'Institución'},{t:'Contacto'},{t:'Origen'},{t:'Alta'},{t:'Cuenta'}],
-  CONTACTOS.map(c=>[`<b>${esc(c.n)}</b>${c.cons?' <span class="tag t-good" style="padding:1px 7px">consiente</span>':''}`,
-   esc(c.r),esc(c.i),`<span class="mini">${esc(c.mail||'')}${c.tel?'<br>'+esc(c.tel):''}</span>`,
-   `<span class="tag">${esc(c.o)}</span>`,fmtF(c.f),
-   c.cta?esc(C(c.cta)?.n||''):'<span class="mini">sin vincular</span>']))}
- <p class="src">Consentimiento y finalidad por contacto (Ley 25.326). Sin eso, la base no se puede usar para envíos.</p>`
- :vacio('La base está vacía. Cargá los contactos de las jornadas, universidades y visitas, o importá un CSV.',{t:'+ Nuevo contacto',fn:'nuevoContacto()'})}</div>`;
+
+ <div class="grid g2" style="margin-bottom:16px">
+  <div class="card"><h3>Segmentos</h3><p class="sub">La categoría la declara la persona. Tocá un segmento para filtrar la lista.</p>
+   ${porCat.map(x=>{const pct=T?x.n/T*100:0;const col=x.k==='A confirmar'?'var(--ink-3)':'var(--s1)';
+    return `<div class="segrow${FB.cat===x.k?' on':''}" onclick="filtroBase('cat','${FB.cat===x.k?'':x.k}')">
+     <div class="segtop"><span>${x.k}</span><b>${x.n}</b></div>
+     <div class="bar"><i style="width:${pct.toFixed(1)}%;background:${col}"></i></div></div>`}).join('')}
+   ${porCat[0].n?`<p class="src">Los ${porCat[0].n} "a confirmar" no se completan a dedo: la categoría entra sola cuando la persona responde el primer mensaje.</p>`:''}
+  </div>
+  <div class="card"><h3>Cómo se mueve la base</h3><p class="sub">Cada paso lo dispara un hecho, no una intención</p>
+   ${porEtapa.map(x=>{const pct=T?x.n/T*100:0;
+    return `<div class="segrow${FB.et===x.k?' on':''}" onclick="filtroBase('et','${FB.et===x.k?'':x.k}')">
+     <div class="segtop"><span>${x.k}</span><b>${x.n}</b></div>
+     <div class="bar"><i style="width:${pct.toFixed(1)}%;background:var(--s3)"></i></div></div>`}).join('')}
+   <p class="src">Cargado → Contactado (salió el mensaje) → Declaró categoría (respondió) → Interactuó (descargó o pidió algo) → Cuenta abierta.</p>
+  </div>
+ </div>
+
+ <div class="card" style="margin-bottom:16px"><h3>Origen del dato</h3>
+  <p class="sub">De dónde salió cada contacto y qué archivo lo trajo</p>
+  ${tbl([{t:'Origen'},{t:'Institución'},{t:'Tipo'},{t:'Desde'},{t:'Contactos',n:1},{t:'Declarados',n:1},{t:'Consienten',n:1}],
+   fuentes.map(f=>[`<b>${esc(f.k)}</b>${f.arch?`<div class="mini">${esc(f.arch)}</div>`:''}`,
+    esc(f.inst||'—'),f.tipo?`<span class="tag">${esc(f.tipo)}</span>`:'—',fmtF(f.f),
+    `<a href="#" onclick="filtroBase('org','${esc(f.k)}');return false">${f.n}</a>`,
+    f.dec||'<span class="mini">—</span>',f.cons||'<span class="mini">—</span>']))}
+  <p class="src">El origen no se edita: es la trazabilidad del dato. Si un contacto aparece en dos listas, queda con el origen más antiguo.</p>
+ </div>
+
+ <div class="card"><div class="chead"><div><h3>Contactos</h3>
+   <p class="sub">${hayFiltro?`${lista.length} de ${T} registros · filtro activo`:`${T} registros`}</p></div>
+   ${hayFiltro?'<button class="btn" onclick="limpiarFiltros()">Quitar filtros</button>':''}</div>
+ ${lista.length?tbl([{t:'Nombre'},{t:'Categoría'},{t:'Origen'},{t:'Contacto'},{t:'Etapa'},{t:'Consent.'},{t:'Cuenta'},{t:''}],
+  lista.map(c=>{const cat=catDe(c),pend=cat==='A confirmar';
+   return [`<b>${esc(c.n)}</b>${c.r?`<div class="mini">${esc(c.r)}</div>`:''}`,
+   pend?`<span class="tag">${cat}</span>${c.pista?`<div class="mini">parece ${esc(c.pista).toLowerCase()}</div>`:''}`
+       :`<span class="tag t-good"><span class="d"></span>${esc(cat)}</span>`,
+   `${esc(c.o||'—')}${c.i?`<div class="mini">${esc(c.i)}</div>`:''}`,
+   `<span class="mini">${esc(c.mail||'')}${c.tel?'<br>'+esc(c.tel):''}</span>`,
+   esc(etapaDe(c)),
+   consDe(c)==='Otorgado'?'<span class="tag t-good"><span class="d"></span>Sí</span>'
+    :consDe(c)==='Baja'?'<span class="tag t-crit"><span class="d"></span>Baja</span>'
+    :'<span class="mini">pendiente</span>',
+   c.cta?esc(C(c.cta)?.n||''):'<span class="mini">sin vincular</span>',
+   `<a href="#" onclick="editarContacto(${c.id});return false">editar</a>`];}))
+  :vacio('Ningún contacto cumple el filtro.')}
+ <p class="src">Ley 25.326: cada contacto guarda de dónde salió y si dio consentimiento. Sin consentimiento otorgado no entra en un envío.</p></div>`;
 };
 
 V.reportes=()=>{
@@ -577,8 +668,9 @@ function dl(name,rows){
 function bajar(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href);}
 function exportVentas(){dl(`nucleo_ventas_${MESES[MES]}_${AÑO}.csv`,[['Fecha','Cuenta','Tipo','Zona','Producto','Presentacion','Categoria','Unidades','Precio unitario','Total','Origen'],
  ...ventasMes(MES).map(v=>[v.f,C(v.c)?.n,C(v.c)?.t,C(v.c)?.z,P(v.p)?.n,P(v.p)?.pres,P(v.p)?.cat,v.u,v.pu,v.u*v.pu,v.o])]);}
-function exportBase(){dl('nucleo_contactos.csv',[['Nombre','Rol','Institucion','Email','Telefono','Origen','Alta','Consentimiento','Cuenta'],
- ...CONTACTOS.map(c=>[c.n,c.r,c.i,c.mail,c.tel,c.o,c.f,c.cons?'si':'no',c.cta?C(c.cta)?.n:''])]);}
+function exportBase(){dl('nucleo_contactos.csv',
+ [['Nombre','Email','Telefono','Categoria','Pista','Profesion','Origen','Institucion','TipoOrigen','FechaAlta','Archivo','Etapa','Consentimiento','Cuenta'],
+ ...CONTACTOS.map(c=>[c.n,c.mail,c.tel,catDe(c),c.pista||'',c.r||'',c.o||'',c.i||'',c.tipo||'',c.f||'',c.arch||'',etapaDe(c),consDe(c),c.cta?C(c.cta)?.n:''])]);}
 function exportStock(){dl(`nucleo_stock_valorizado_${MESES[MES]}_${AÑO}.csv`,
  [['Producto','Presentacion','Categoria','Lote','Unidades','Costo unitario','Valorizado a costo','Precio de lista','Valorizado a venta','Vencimiento','Dias','Estado'],
  ...LOTES.map(l=>({l,d:diasA(l.v)})).sort((a,b)=>a.d-b.d).map(r=>{const[,t]=nivelVto(r.d);
@@ -587,33 +679,70 @@ function exportStock(){dl(`nucleo_stock_valorizado_${MESES[MES]}_${AÑO}.csv`,
    r.l.v,r.d,t];})]);}
 function exportTodo(){bajar('nucleo_respaldo.json',new Blob([DB.exportar()],{type:'application/json'}));}
 
-/* importar contactos desde CSV */
+/* Importar contactos desde CSV.
+   Reconoce el archivo consolidado (Nombre;Email;Categoria;Origen;Institucion;TipoOrigen;FechaAlta…)
+   y también planillas sueltas con solo nombre y mail.
+   Nunca pisa el origen de un contacto que ya estaba: ese dato es la trazabilidad. */
 function importarCSV(file){
  const fr=new FileReader();
  fr.onload=async()=>{
   const filas=SHEET.parseCSV(String(fr.result));
   if(filas.length<2)return toast('El archivo no tiene filas.','err');
   const h=filas[0];
-  const iN=SHEET.col(h,['nombre','apellido']),iR=SHEET.col(h,['rol','profesion','cargo']),
-   iI=SHEET.col(h,['institu','hospital','empresa']),iM=SHEET.col(h,['mail','correo']),
-   iT=SHEET.col(h,['tel','cel','whats']),iO=SHEET.col(h,['origen','fuente','accion']);
+  const col=(...n)=>SHEET.col(h,n);
+  const iN=col('nombre','apellido'),iM=col('mail','correo','email'),iT=col('tel','cel','whats'),
+   iR=col('profesion','rol','cargo'),iI=col('institucion','instituci','hospital','universidad','empresa'),
+   iC=col('categoria','segmento'),iO=col('origen','fuente','accion'),iTO=col('tipoorigen','tipo de origen','tipo'),
+   iF=col('fechaalta','fecha'),iA=col('archivo'),iP=col('pista'),iCo=col('consent');
   if(iN<0)return toast('No encontré la columna Nombre.','err');
-  let n=0,nuevasCtas=0;
+  if(iM<0&&iT<0)return toast('El archivo no trae ni mail ni teléfono: así no sirve para contactar.','err');
+
+  const val=(r,i)=>i>=0&&r[i]!=null?String(r[i]).trim():'';
+  const norm=s=>SHEET.norm(s);
+  let nuevos=0,repetidos=0,sinMail=0,ctasNuevas=0,actualizados=0;
+
   for(const r of filas.slice(1)){
-   const nom=String(r[iN]||'').trim(); if(!nom)continue;
-   const inst=(iI>=0?String(r[iI]||'').trim():'');
+   const nom=val(r,iN); if(!nom)continue;
+   const mail=val(r,iM).toLowerCase();
+   const tel=val(r,iT);
+   if(!mail&&!tel){sinMail++;continue;}
+
+   /* ¿ya estaba? por mail, si no por nombre + origen */
+   const ya=CONTACTOS.find(c=>(mail&&norm(c.mail)===norm(mail))||(!mail&&norm(c.n)===norm(nom)&&norm(c.o)===norm(val(r,iO))));
+   const cat=CATEGORIAS.includes(val(r,iC))?val(r,iC):'A confirmar';
+   if(ya){
+    repetidos++;
+    /* completa lo que falte, sin tocar origen ni categoría ya declarada */
+    const parche={};
+    if(!ya.tel&&tel)parche.tel=tel;
+    if(!ya.mail&&mail)parche.mail=mail;
+    if(!ya.i&&val(r,iI))parche.i=val(r,iI);
+    if((!ya.cat||ya.cat==='A confirmar')&&cat!=='A confirmar')parche.cat=cat;
+    if(Object.keys(parche).length){await DB.updContacto(ya.id,parche);actualizados++;}
+    continue;
+   }
+
+   const inst=val(r,iI);
    let ctaId=null;
    if(inst){
-    let c=CUENTAS.find(x=>SHEET.norm(x.n)===SHEET.norm(inst));
-    if(!c){c=await DB.addCuenta({n:inst,t:'Institución',z:'',ref:nom,tel:iT>=0?r[iT]:'',
-      mail:iM>=0?r[iM]:'',e:'Contactada',notas:'Alta automática al importar contactos.',desde:''});nuevasCtas++;}
+    let c=CUENTAS.find(x=>norm(x.n)===norm(inst));
+    if(!c){c=await DB.addCuenta({n:inst,t:'Institución',z:'',ref:'',tel:'',mail:'',
+      e:'Contactada',notas:'Alta automática al importar la base de contactos.',desde:''});ctasNuevas++;}
     ctaId=c.id;
    }
-   await DB.addContacto({n:nom,r:iR>=0?r[iR]:'',i:inst,mail:iM>=0?r[iM]:'',
-    tel:iT>=0?r[iT]:'',o:iO>=0?r[iO]:'Importado',f:hoy(),cta:ctaId,cons:false});
-   n++;
+   await DB.addContacto({n:nom,r:val(r,iR),i:inst,mail,tel,
+    cat,pista:val(r,iP),
+    o:val(r,iO)||'Importado',tipo:TIPOS_ORIGEN.includes(val(r,iTO))?val(r,iTO):'',
+    arch:val(r,iA)||file.name.replace(/\.csv$/i,''),
+    f:val(r,iF)||hoy(),et:'Cargado',
+    cons:CONSENTIMIENTO.includes(val(r,iCo))?val(r,iCo):'Pendiente',
+    cta:ctaId});
+   nuevos++;
   }
-  toast(`${n} contactos importados${nuevasCtas?` · ${nuevasCtas} cuentas nuevas`:''}.`,'ok');render();
+  toast(`${nuevos} contactos nuevos${ctasNuevas?` · ${ctasNuevas} institución(es) dada(s) de alta`:''}.`,'ok');
+  if(repetidos)toast(`${repetidos} ya estaban en la base${actualizados?`, ${actualizados} completado(s) con el dato nuevo`:', sin cambios'}.`);
+  if(sinMail)toast(`${sinMail} fila(s) sin mail ni teléfono quedaron afuera.`,'err');
+  render();
  };
  fr.readAsText(file,'utf-8');
 }
