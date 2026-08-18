@@ -41,7 +41,6 @@ create table if not exists contacto (
   categoria     text not null default 'A confirmar',  -- la declara la persona, no el sistema
   pista         text,                             -- lo que el dominio sugiere. Nunca es el dato.
   etapa         text not null default 'Cargado',  -- Cargado → Contactado → Declaró categoría → Interactuó → Cuenta abierta
-  consentimiento text not null default 'Pendiente',   -- Pendiente | Otorgado | Baja (Ley 25.326)
   cuenta_id     bigint references cuenta(id) on delete set null,
   alta          date not null default current_date,
   constraint contacto_email_unico unique (email)
@@ -56,9 +55,7 @@ create index if not exists contacto_categoria_idx on contacto(categoria);
 -- alter table contacto add column if not exists categoria text not null default 'A confirmar';
 -- alter table contacto add column if not exists pista text;
 -- alter table contacto add column if not exists etapa text not null default 'Cargado';
--- alter table contacto alter column consentimiento drop default;
--- alter table contacto alter column consentimiento type text using (case when consentimiento then 'Otorgado' else 'Pendiente' end);
--- alter table contacto alter column consentimiento set default 'Pendiente';
+-- alter table contacto drop column if exists consentimiento;
 
 -- ---------- Operación ----------
 create table if not exists venta (
