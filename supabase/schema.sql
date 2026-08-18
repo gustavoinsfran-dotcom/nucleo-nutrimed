@@ -35,12 +35,30 @@ create table if not exists contacto (
   institucion   text,
   email         text,
   telefono      text,
-  origen        text,
-  consentimiento boolean not null default false,  -- Ley 25.326
+  origen        text,                             -- hecho: de qué lista salió. No se edita.
+  tipo_origen   text,                             -- Académico | Asistencial | Digital | Comercial
+  archivo       text,                             -- planilla de procedencia, para trazar el dato
+  categoria     text not null default 'A confirmar',  -- la declara la persona, no el sistema
+  pista         text,                             -- lo que el dominio sugiere. Nunca es el dato.
+  etapa         text not null default 'Cargado',  -- Cargado → Contactado → Declaró categoría → Interactuó → Cuenta abierta
+  consentimiento text not null default 'Pendiente',   -- Pendiente | Otorgado | Baja (Ley 25.326)
   cuenta_id     bigint references cuenta(id) on delete set null,
-  alta          date not null default current_date
+  alta          date not null default current_date,
+  constraint contacto_email_unico unique (email)
 );
 create index if not exists contacto_cuenta_idx on contacto(cuenta_id);
+create index if not exists contacto_origen_idx on contacto(origen);
+create index if not exists contacto_categoria_idx on contacto(categoria);
+
+-- Migración para una base que ya existe: corré esto una sola vez.
+-- alter table contacto add column if not exists tipo_origen text;
+-- alter table contacto add column if not exists archivo text;
+-- alter table contacto add column if not exists categoria text not null default 'A confirmar';
+-- alter table contacto add column if not exists pista text;
+-- alter table contacto add column if not exists etapa text not null default 'Cargado';
+-- alter table contacto alter column consentimiento drop default;
+-- alter table contacto alter column consentimiento type text using (case when consentimiento then 'Otorgado' else 'Pendiente' end);
+-- alter table contacto alter column consentimiento set default 'Pendiente';
 
 -- ---------- Operación ----------
 create table if not exists venta (
