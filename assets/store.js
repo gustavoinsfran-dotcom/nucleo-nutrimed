@@ -71,13 +71,15 @@ const DB = {
     if (err) throw err.error;
     if (p.data.length) PROD = p.data.map(r => ({ id: r.sku, n: r.nombre, cat: r.categoria, pres: r.presentacion, p: Number(r.precio) }));
     CUENTAS = c.data.map(r => ({ id: r.id, n: r.nombre, t: r.tipo, z: r.zona, e: r.estado, ref: r.referente || '', tel: r.telefono || '', mail: r.email || '', notas: r.notas || '', desde: r.desde || '' }));
-    VENTAS = v.data.map(r => ({ id: r.id, f: r.fecha, m: mesDe(r.fecha), c: r.cuenta_id, p: r.sku, u: r.unidades, pu: Number(r.precio_unitario), o: r.origen }));
+    VENTAS = v.data.map(r => ({ id: r.id, f: r.fecha, m: mesDe(r.fecha), c: r.cuenta_id, p: r.sku,
+      u: r.unidades, pu: Number(r.precio_unitario), o: r.origen, pr: r.prescriptor_id }));
     LOTES = l.data.map(r => ({ p: r.sku, l: r.lote, u: r.unidades, v: r.vencimiento }));
     ACCIONES = a.data.map(r => ({ id: r.id, n: r.nombre, t: r.tipo, f: r.fecha, inv: Number(r.inversion || 0), cont: r.contactos || 0, cta: r.cuentas || 0, vta: r.ventas || 0, est: r.estado }));
     CONTACTOS = k.data.map(r => ({ id: r.id, n: r.nombre, r: r.rol, i: r.institucion,
       mail: r.email || '', tel: r.telefono || '', o: r.origen, f: r.alta, cta: r.cuenta_id,
       cat: r.categoria || 'A confirmar', pista: r.pista || '',
-      tipo: r.tipo_origen || '', et: r.etapa || 'Cargado', arch: r.archivo || '' }));
+      tipo: r.tipo_origen || '', et: r.etapa || 'Cargado', arch: r.archivo || '',
+      presc: !!r.prescriptor, esp: r.especialidad || '', amb: r.ambito || '', mat: r.matricula || '' }));
   },
 
   /* ---------- altas ---------- */
@@ -109,7 +111,9 @@ const DB = {
         nombre: x.n, rol: x.r, institucion: x.i, email: x.mail, telefono: x.tel,
         origen: x.o, cuenta_id: x.cta || null, alta: x.f,
         categoria: x.cat || 'A confirmar', pista: x.pista || null, tipo_origen: x.tipo || null,
-        etapa: x.et || 'Cargado', archivo: x.arch || null }).select().single();
+        etapa: x.et || 'Cargado', archivo: x.arch || null,
+        prescriptor: !!x.presc, especialidad: x.esp || null, ambito: x.amb || null,
+        matricula: x.mat || null }).select().single();
       if (error) throw error;
       x.id = data.id;
     } else { x.id = (CONTACTOS.reduce((a, c) => Math.max(a, c.id || 0), 0) || 0) + 1; }
@@ -125,7 +129,8 @@ const DB = {
       await this.sb.from('contacto').update({
         nombre: c.n, rol: c.r, institucion: c.i, email: c.mail, telefono: c.tel,
         categoria: c.cat, tipo_origen: c.tipo, etapa: c.et,
-        cuenta_id: c.cta || null }).eq('id', id);
+        prescriptor: !!c.presc, especialidad: c.esp || null, ambito: c.amb || null,
+        matricula: c.mat || null, cuenta_id: c.cta || null }).eq('id', id);
     }
     this.guardarLocal();
   },
@@ -179,7 +184,8 @@ const DB = {
     if (this.modo === 'vivo') {
       const { error } = await this.sb.from('venta').insert({
         fecha: v.f, cuenta_id: v.c, sku: v.p, unidades: v.u,
-        precio_unitario: v.pu, origen: v.o, pedido: v.ped || null, cargado_por: this.user?.email || null });
+        precio_unitario: v.pu, origen: v.o, prescriptor_id: v.pr || null,
+        pedido: v.ped || null, cargado_por: this.user?.email || null });
       if (error) throw error;
       for (const l of tocados) await this.sb.from('lote').update({ unidades: l.u }).eq('sku', l.p).eq('lote', l.l);
     }

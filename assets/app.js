@@ -164,6 +164,68 @@ function vacio(txt,btn){
  return `<div class="empty"><p>${txt}</p>${btn?`<button class="btn pri" onclick="${btn.fn}">${esc(btn.t)}</button>`:''}</div>`;
 }
 
+
+/* ============ PRESCRIPTORES ============
+   Un prescriptor es un contacto marcado como tal. No hay base aparte:
+   quien indica producto sale de los mismos 190 contactos que ya cargamos. */
+const PRESC=()=>CONTACTOS.filter(c=>c.presc);
+const PR=id=>CONTACTOS.find(c=>c.id===id);
+const ventasDe=id=>VENTAS.filter(v=>v.pr===id);
+const factPr=id=>fact(ventasDe(id));
+const unidPr=id=>ventasDe(id).reduce((a,v)=>a+v.u,0);
+const ultimaPr=id=>{const l=ventasDe(id);return l.length?l.map(v=>v.f).sort().pop():'';};
+/* días desde la última prescripción; null si nunca prescribió */
+const diasSinPr=id=>{const f=ultimaPr(id);if(!f)return null;
+ return Math.round((new Date(hoy())-new Date(f))/864e5);};
+const DORMIDO=90;
+const ambitoDe=c=>c.amb||(c.cta?'Institución':'Consultorio propio');
+/* dónde ejerce, en texto: si atiende por su cuenta, la institución no manda */
+const dondeDe=c=>ambitoDe(c)==='Consultorio propio'?'':(C(c.cta)?.n||'');
+/* la matrícula a veces ya viene con prefijo: no lo duplicamos */
+const matDe=c=>{const m=String(c.mat||'').trim();return m?(/^m\.?\s?[np]/i.test(m)?m:'M.N. '+m):'';};
+
+/* alta rápida desde la carga de venta: entra a la base como un contacto más */
+function nuevoPrescriptor(tras){
+ modal({titulo:'Nuevo prescriptor',ok:'Dar de alta',ancho:'620px',campos:[
+  {k:'n',l:'Nombre y apellido',req:true},
+  {k:'esp',l:'Especialidad',t:'select',val:'Nutrición',opts:ESPECIALIDADES.map(x=>({v:x,t:x})),half:true},
+  {k:'amb',l:'Dónde ejerce',t:'select',val:'Institución',opts:AMBITOS.map(x=>({v:x,t:x})),half:true},
+  {k:'cta',l:'Institución',t:'select',val:'',opts:[{v:'',t:'Sin institución · consultorio propio'},
+    ...CUENTAS.map(c=>({v:c.id,t:c.n}))],half:true,
+   hint:'Dejalo vacío si atiende solo en su consultorio.'},
+  {k:'mat',l:'Matrícula',half:true,ph:'Opcional'},
+  {k:'mail',l:'Email',t:'email',half:true},
+  {k:'tel',l:'Teléfono',half:true}],
+  onOk:async v=>{
+   const c=await DB.addContacto({n:v.n,r:v.esp,esp:v.esp,amb:v.amb,mat:v.mat,
+    mail:v.mail,tel:v.tel,cta:v.cta?+v.cta:null,i:v.cta?C(+v.cta)?.n||'':'',
+    cat:'Profesional',presc:true,o:'Alta desde venta',tipo:'Comercial',
+    f:hoy(),et:'Prescribe'});
+   toast(`${v.n} quedó dado de alta como prescriptor.`,'ok');
+   if(tras)tras(c.id);else render();}});
+}
+
+/* marcar o desmarcar a un contacto que ya está en la base */
+function marcarPrescriptor(id){
+ const c=PR(id); if(!c)return;
+ modal({titulo:c.n,ok:c.presc?'Guardar':'Marcar como prescriptor',ancho:'620px',campos:[
+  {k:'esp',l:'Especialidad',t:'select',val:c.esp||c.r||'Nutrición',opts:ESPECIALIDADES.map(x=>({v:x,t:x})),half:true},
+  {k:'amb',l:'Dónde ejerce',t:'select',val:ambitoDe(c),opts:AMBITOS.map(x=>({v:x,t:x})),half:true},
+  {k:'cta',l:'Institución',t:'select',val:c.cta||'',opts:[{v:'',t:'Sin institución · consultorio propio'},
+    ...CUENTAS.map(x=>({v:x.id,t:x.n}))],half:true},
+  {k:'mat',l:'Matrícula',val:c.mat,half:true,ph:'Opcional'}],
+  onOk:async v=>{
+   await DB.updContacto(id,{presc:true,esp:v.esp,amb:v.amb,mat:v.mat,
+    cta:v.cta?+v.cta:null,cat:'Profesional',
+    et:ETAPAS.indexOf(c.et||'Cargado')<ETAPAS.indexOf('Prescribe')?'Prescribe':c.et});
+   toast('Listo, ya figura en el ranking.','ok');render();}});
+}
+function quitarPrescriptor(id){
+ modal({titulo:'Quitar del ranking',ok:'Quitar',campos:[
+  {k:'x',t:'nota',l:'',ph:'Deja de figurar como prescriptor. El contacto sigue en la base y las ventas ya cargadas conservan su atribución.'}],
+  onOk:async()=>{await DB.updContacto(id,{presc:false});toast('Quitado del ranking.');render();}});
+}
+
 /* ============ ALTAS ============ */
 function nuevaCuenta(id){
  const c=id?C(id):null;
@@ -226,22 +288,41 @@ function nuevoLote(){
   {k:'v',l:'Vencimiento',t:'date',req:true,half:true}],
   onOk:async v=>{await DB.addLote({p:v.p,l:v.l,u:+v.u,v:v.v});toast('Lote cargado.');render();}});
 }
-function nuevaVenta(){
+function nuevaVenta(pre){
  if(!CUENTAS.length){toast('Primero cargá al menos una cuenta.','err');return nuevaCuenta();}
  const prods=PROD.map(p=>({v:p.id,t:p.n+' · '+p.pres}));
- modal({titulo:'Cargar venta',ok:'Guardar venta',campos:[
-  {k:'c',l:'Cuenta',t:'select',opts:CUENTAS.map(c=>({v:c.id,t:c.n})),req:true},
+ /* los prescriptores primero, después el resto de los profesionales de la base */
+ const pr=PRESC().sort((a,b)=>a.n.localeCompare(b.n,'es'));
+ const otros=CONTACTOS.filter(c=>!c.presc&&c.cat==='Profesional').sort((a,b)=>a.n.localeCompare(b.n,'es'));
+ const opsPr=[{v:'',t:'Sin identificar'},
+  ...pr.map(c=>({v:c.id,t:c.n+' · '+(dondeDe(c)||'consultorio propio')})),
+  ...(otros.length?[{v:'_sep',t:'──── otros profesionales de la base ────'}]:[]),
+  ...otros.map(c=>({v:c.id,t:c.n})),
+  {v:'_new',t:'+ Dar de alta un prescriptor nuevo'}];
+ modal({titulo:'Cargar venta',ok:'Guardar venta',ancho:'620px',campos:[
+  {k:'c',l:'Cliente — quién compra y paga',t:'select',opts:CUENTAS.map(c=>({v:c.id,t:c.n+' · '+c.t})),req:true},
+  {k:'pr',l:'Prescriptor — quién la indicó',t:'select',val:pre||'',opts:opsPr,
+   hint:'Si la venta no vino de una indicación, dejalo en "Sin identificar". No lo completes a dedo.'},
   {k:'p',l:'Producto',t:'select',opts:prods,req:true},
   {k:'u',l:'Unidades',t:'number',val:1,req:true,half:true},
   {k:'pu',l:'Precio unitario',t:'number',val:PROD[0]?.p||0,req:true,half:true},
   {k:'f',l:'Fecha',t:'date',val:hoy(),req:true,half:true},
   {k:'o',l:'Origen',t:'select',opts:ORIGENES_VENTA,half:true}],
   onOk:async v=>{
-   await DB.addVenta({f:v.f,m:+v.f.split('-')[1]-1,c:+v.c,p:v.p,u:+v.u,pu:+v.pu,o:v.o});
+   if(v.pr==='_new'||v.pr==='_sep'){toast('Elegí un prescriptor o dejalo sin identificar.','err');return false;}
+   const idPr=v.pr?+v.pr:null;
+   await DB.addVenta({f:v.f,m:+v.f.split('-')[1]-1,c:+v.c,p:v.p,u:+v.u,pu:+v.pu,o:v.o,pr:idPr});
+   /* quien indica, prescribe: el contacto pasa solo a la etapa que corresponde */
+   if(idPr){const c=PR(idPr);
+    if(c&&!c.presc)await DB.updContacto(idPr,{presc:true,cat:'Profesional',et:'Prescribe'});}
    MES=+v.f.split('-')[1]-1;$('#periodo').value=MES;toast('Venta cargada.');render();}});
- const sel=$('#f_p'),pu=$('#f_pu');
+ const sel=$('#f_p'),pu=$('#f_pu'),sp=$('#f_pr');
  const sync=()=>{const p=P(sel.value);if(p&&p.p)pu.value=p.p;};
  sel.addEventListener('change',sync);sync();
+ /* si elige "dar de alta", se abre el alta y vuelve con el nuevo ya seleccionado */
+ sp.addEventListener('change',()=>{
+  if(sp.value==='_sep'){sp.value='';return;}
+  if(sp.value==='_new'){$('#dlg').close();nuevoPrescriptor(id=>nuevaVenta(id));}});
 }
 function editarPrecio(sku){
  const p=P(sku);
@@ -344,6 +425,14 @@ V.panel=()=>{
   </div>
  </div>
  <div class="grid g2" style="margin-top:16px">
+  ${PRESC().length?`<div class="card"><div class="chead"><div><h3>Top prescriptores</h3>
+   <p class="sub">Quiénes indican la línea, en el acumulado del año</p></div>
+   <button class="btn" onclick="ir('prescriptores')">Ver todos</button></div>
+   ${barsH(PRESC().map(c=>({n:c.n+(c.cta?' · '+(C(c.cta)?.n||''):' · consultorio propio'),v:factPr(c.id),t:money(factPr(c.id))}))
+     .filter(x=>x.v).sort((a,b)=>b.v-a.v).slice(0,6),'var(--s1)')||'<p class="mini">Todavía no hay ventas atribuidas a un prescriptor.</p>'}
+   ${(()=>{const d=PRESC().filter(c=>{const x=diasSinPr(c.id);return x!==null&&x>DORMIDO;}).length;
+     return d?`<p class="src" style="color:var(--serious)">${d} prescriptor(es) dormidos: prescribían y dejaron de hacerlo.</p>`:'';})()}
+  </div>`:''}
   <div class="card"><h3>Marketing → venta</h3><p class="sub">Acciones y lo que generaron</p>
    ${ACCIONES.length?ACCIONES.slice(0,5).map(a=>`<div class="rowline">
      <div><b>${esc(a.n)}</b><div class="mini">${a.cont} contactos · ${a.cta} cuentas abiertas</div></div>
@@ -374,13 +463,15 @@ V.ventas=()=>{
  const vm=ventasMes(MES).slice().sort((a,b)=>b.f.localeCompare(a.f));
  return `<div class="card">
   <div class="chead"><div><h3>Ventas de ${MESES[MES]} ${AÑO}</h3>
-   <p class="sub">${vm.length} operaciones · ${money(fact(vm))}</p></div>
+   <p class="sub">${vm.length} operaciones · ${money(fact(vm))}${vm.length?` · ${vm.filter(v=>v.pr).length} con prescriptor identificado`:''}</p></div>
    <div class="btnrow">
    <button class="btn" onclick="$('#xlsVentas').click()">↥ Subir ventas del sistema</button>
    <button class="btn pri" onclick="nuevaVenta()">+ Cargar venta</button></div></div>
   ${vm.length?tbl(
-   [{t:'Fecha'},{t:'Cuenta'},{t:'Producto'},{t:'Unid.',n:1},{t:'Total',n:1},{t:'Origen'}],
-   vm.map(v=>[fmtF(v.f),`<b>${esc(C(v.c)?.n||'—')}</b>`,
+   [{t:'Fecha'},{t:'Cliente'},{t:'Prescriptor'},{t:'Producto'},{t:'Unid.',n:1},{t:'Total',n:1},{t:'Origen'}],
+   vm.map(v=>[fmtF(v.f),`<b>${esc(C(v.c)?.n||'—')}</b><div class="mini">${esc(C(v.c)?.t||'')}</div>`,
+    v.pr&&PR(v.pr)?`<a href="#" onclick="fichaPr(${v.pr});return false">${esc(PR(v.pr).n)}</a><div class="mini">${esc(dondeDe(PR(v.pr))||'consultorio propio')}</div>`
+      :'<span class="mini">sin identificar</span>',
     `${esc(P(v.p)?.n||v.p)}<div class="mini">${esc(P(v.p)?.pres||'')}</div>`,
     v.u,money(v.u*v.pu),`<span class="tag">${esc(v.o)}</span>`]))
   :vacio('No hay ventas cargadas en '+MESES[MES]+'.',{t:'+ Cargar venta',fn:'nuevaVenta()'})}
@@ -588,6 +679,14 @@ function loteCampo(campo){
    for(const id of FB.sel)await DB.updContacto(id,{[campo]:val});
    toast(`${FB.sel.size} contacto(s) actualizados.`,'ok');FB.sel.clear();render();}});
 }
+function lotePrescriptor(){
+ const n=FB.sel.size;
+ modal({titulo:`Marcar ${n} como prescriptores`,ok:'Marcar',campos:[
+  {k:'esp',l:'Especialidad',t:'select',val:'Nutrición',opts:ESPECIALIDADES.map(x=>({v:x,t:x}))},
+  {k:'x',t:'nota',l:'',ph:'Pasan a figurar en el ranking. Si alguno no prescribe, se lo saca después desde su ficha.'}],
+  onOk:async v=>{for(const id of FB.sel)await DB.updContacto(id,{presc:true,cat:'Profesional',esp:v.esp});
+   toast(`${n} prescriptor(es) marcados.`,'ok');FB.sel.clear();render();}});
+}
 function loteBorrar(){
  const n=FB.sel.size;
  modal({titulo:`Borrar ${n} contacto(s)`,ok:'Sí, borrar',campos:[
@@ -695,6 +794,7 @@ V.base=()=>{
     <button class="btn" onclick="loteCampo('cat')">Categoría</button>
     <button class="btn" onclick="loteCampo('et')">Etapa</button>
     <button class="btn" onclick="loteCampo('cta')">Institución</button>
+    <button class="btn" onclick="lotePrescriptor()">Marcar prescriptor</button>
     <button class="btn" onclick="loteBorrar()">Borrar</button>
     <button class="btn" onclick="FB.sel.clear();render()">Deseleccionar</button></div>
   </div>
@@ -704,13 +804,13 @@ V.base=()=>{
    {t:'Contacto'},{t:'Origen',k:'o'},{t:'Etapa',k:'et'},{t:''}],
   lista.map(c=>{const cat=catDe(c),pend=cat==='A confirmar';
    return [`<input type="checkbox" onchange="selUno(${c.id},this.checked)"${FB.sel.has(c.id)?' checked':''} aria-label="Seleccionar">`,
-   `<b>${esc(c.n)}</b>${c.r?`<div class="mini">${esc(c.r)}</div>`:''}`,
+   `<b>${esc(c.n)}</b>${c.presc?' <span class="tag t-good" style="padding:1px 8px">prescribe</span>':''}${c.r?`<div class="mini">${esc(c.r)}</div>`:''}`,
    pend?`<span class="tag">${cat}</span>${c.pista?`<div class="mini">parece ${esc(c.pista).toLowerCase()}</div>`:''}`
        :`<span class="tag t-good"><span class="d"></span>${esc(cat)}</span>`,
    esc(C(c.cta)?.n||c.i||'—'),
    `<span class="mini">${esc(c.mail||'')}${c.tel?'<br>'+esc(c.tel):''}</span>`,
    esc(c.o||'—'),esc(etapaDe(c)),
-   `<a href="#" onclick="editarContacto(${c.id});return false">editar</a>`];}),
+   `<a href="#" onclick="editarContacto(${c.id});return false">editar</a>${c.cat==='Profesional'&&!c.presc?`<br><a href="#" onclick="marcarPrescriptor(${c.id});return false" class="mini">marcar prescriptor</a>`:c.presc?`<br><a href="#" onclick="fichaPr(${c.id});return false" class="mini">ver ranking</a>`:''}`];}),
   {k:FB.k,asc:FB.asc,fn:'ordenarBase'})
   :vacio('Ningún contacto cumple el filtro.',{t:'Quitar filtros',fn:'limpiarFiltros()'})}
  </div>`;
@@ -775,6 +875,158 @@ V.instituciones=()=>{
  <p class="src">Una institución aparece acá apenas tiene un contacto. Que aparezca no significa que sea cliente: eso se ve en Cuentas.</p></div>`;
 };
 
+
+var FP={q:'',amb:'',k:'fact'};
+function ordenarPr(k){FP.k=k;render();}
+function filtroPr(k,v){FP[k]=FP[k]===v?'':v;render();}
+function buscarPr(v){FP.q=v;render();const i=$('#qPr');if(i){i.focus();i.setSelectionRange(v.length,v.length);}}
+
+V.prescriptores=()=>{
+ const l=PRESC();
+ if(!l.length) return `<div class="card">${vacio(
+  'Todavía no hay prescriptores cargados. Se dan de alta al cargar una venta, o marcando a un profesional que ya está en la base.',
+  {t:'+ Nuevo prescriptor',fn:'nuevoPrescriptor()'})}</div>`;
+
+ const filas=l.map(c=>({c,f:factPr(c.id),u:unidPr(c.id),n:ventasDe(c.id).length,
+   d:diasSinPr(c.id),amb:ambitoDe(c),inst:dondeDe(c)}));
+ const totalPr=filas.reduce((a,x)=>a+x.f,0);
+ const totalGral=fact(VENTAS);
+ const sinPresc=fact(VENTAS.filter(v=>!v.pr));
+ const dormidos=filas.filter(x=>x.d!==null&&x.d>DORMIDO);
+ const nunca=filas.filter(x=>x.d===null);
+ const activos=filas.filter(x=>x.d!==null&&x.d<=DORMIDO);
+ const porInst=filas.filter(x=>x.amb!=='Consultorio propio').reduce((a,x)=>a+x.f,0);
+ const indep=totalPr-porInst;
+ /* concentración: cuánto pesan los cinco primeros */
+ const top5=[...filas].sort((a,b)=>b.f-a.f).slice(0,5).reduce((a,x)=>a+x.f,0);
+
+ const q=SHEET.norm(FP.q);
+ let vis=filas.filter(x=>(!FP.amb||x.amb===FP.amb)&&
+   (!q||[x.c.n,x.inst,x.c.esp,x.c.mat].some(y=>SHEET.norm(y).includes(q))));
+ vis.sort((a,b)=>FP.k==='fact'?b.f-a.f:FP.k==='unid'?b.u-a.u:
+   FP.k==='dias'?((a.d===null?1e9:a.d)-(b.d===null?1e9:b.d))*-1:a.c.n.localeCompare(b.c.n,'es'));
+
+ /* mix de producto por prescriptor */
+ const mixDe=id=>{const m={};ventasDe(id).forEach(v=>{const k=P(v.p)?.cat||'—';m[k]=(m[k]||0)+v.u*v.pu;});
+  const t=Object.values(m).reduce((a,b)=>a+b,0)||1;
+  return ['SNO','Sonda','Módulos'].filter(k=>m[k]).map(k=>({k,pct:m[k]/t*100}));};
+ const colCat={'SNO':'var(--s1)','Sonda':'var(--s2)','Módulos':'var(--s3)'};
+
+ return `<div class="grid g4" style="margin-bottom:16px">
+  <div class="card tile"><div class="lbl">Prescriptores</div><div class="val">${l.length}</div>
+   <div class="dlt">${activos.length} activos · ${nunca.length} sin primera prescripción</div></div>
+  <div class="card tile"><div class="lbl">Facturación atribuida</div><div class="val">${money(totalPr)}</div>
+   <div class="dlt">${totalGral?(totalPr/totalGral*100).toFixed(0):0}% del total · ${money(sinPresc)} sin identificar</div></div>
+  <div class="card tile"><div class="lbl">Dormidos</div>
+   <div class="val" style="color:${dormidos.length?'var(--serious)':'var(--good)'}">${dormidos.length}</div>
+   <div class="dlt">sin prescribir hace más de ${DORMIDO} días</div></div>
+  <div class="card tile"><div class="lbl">Concentración</div>
+   <div class="val">${totalPr?(top5/totalPr*100).toFixed(0):0}%</div>
+   <div class="dlt">de lo atribuido son los 5 primeros</div></div>
+ </div>
+
+ ${dormidos.length?`<div class="card alerta" style="margin-bottom:16px">
+  <h3>Prescriptores dormidos</h3><p class="sub">Prescribían y dejaron de hacerlo. Recuperar a uno cuesta menos que conseguir uno nuevo.</p>
+  ${tbl([{t:'Prescriptor'},{t:'Dónde'},{t:'Facturación',n:1},{t:'Última vez'},{t:'Días',n:1},{t:''}],
+   dormidos.sort((a,b)=>b.f-a.f).map(x=>[
+    `<b>${esc(x.c.n)}</b>${x.c.esp?`<div class="mini">${esc(x.c.esp)}</div>`:''}`,
+    esc(x.inst||'Consultorio propio'),money(x.f),fmtF(ultimaPr(x.c.id)),
+    `<span style="color:var(--serious);font-weight:600">${x.d}</span>`,
+    `${x.c.tel?`<a href="https://wa.me/54${String(x.c.tel).replace(/\D/g,'')}" target="_blank" rel="noopener">WhatsApp</a>`:x.c.mail?`<a href="mailto:${esc(x.c.mail)}">Mail</a>`:'<span class="mini">sin contacto</span>'}`]))}
+ </div>`:''}
+
+ <div class="grid g2" style="margin-bottom:16px">
+  <div class="card"><h3>Institución o consultorio propio</h3>
+   <p class="sub">De dónde viene la facturación que sí tiene prescriptor</p>
+   ${totalPr?`<div class="segrow${FP.amb==='Institución'?' on':''}" onclick="filtroPr('amb','Institución')">
+     <div class="segtop"><span>Desde instituciones</span><b>${money(porInst)}</b></div>
+     <div class="bar"><i style="width:${porInst/totalPr*100}%;background:var(--s2)"></i></div></div>
+    <div class="segrow${FP.amb==='Consultorio propio'?' on':''}" onclick="filtroPr('amb','Consultorio propio')">
+     <div class="segtop"><span>Consultorio propio</span><b>${money(indep)}</b></div>
+     <div class="bar"><i style="width:${indep/totalPr*100}%;background:var(--s1)"></i></div></div>`
+    :'<p class="mini">Todavía no hay ventas atribuidas.</p>'}
+   <p class="src">Un profesional que atiende en los dos lados suma del lado de la institución. Se cambia en su ficha.</p>
+  </div>
+  <div class="card"><h3>Por especialidad</h3><p class="sub">Quién indica la línea</p>
+   ${(()=>{const e={};filas.forEach(x=>{const k=x.c.esp||'Sin definir';e[k]=(e[k]||0)+x.f;});
+     const ord=Object.entries(e).sort((a,b)=>b[1]-a[1]);
+     const mx=ord[0]?.[1]||1;
+     return ord.length?barsH(ord.map(([n,v])=>({n,v,t:money(v)})),'var(--s1)')
+      :'<p class="mini">Sin datos todavía.</p>';})()}
+  </div>
+ </div>
+
+ <div class="card">
+  <div class="chead"><div><h3>Ranking de prescriptores</h3>
+   <p class="sub">${vis.length===filas.length?`${filas.length} profesionales`:`${vis.length} de ${filas.length}`}</p></div>
+   <div class="btnrow"><button class="btn pri" onclick="nuevoPrescriptor()">+ Nuevo prescriptor</button></div></div>
+  <div class="barra">
+   <input id="qPr" class="buscador" type="search" placeholder="Buscar por nombre, institución, especialidad o matrícula…"
+    value="${esc(FP.q)}" oninput="buscarPr(this.value)">
+   <select class="btn" onchange="FP.k=this.value;render()">
+    <option value="fact"${FP.k==='fact'?' selected':''}>Ordenar por facturación</option>
+    <option value="unid"${FP.k==='unid'?' selected':''}>Ordenar por unidades</option>
+    <option value="dias"${FP.k==='dias'?' selected':''}>Ordenar por actividad reciente</option>
+    <option value="nom"${FP.k==='nom'?' selected':''}>Ordenar por nombre</option>
+   </select>
+  </div>
+  ${FP.amb?`<div class="chips"><button class="chip" onclick="filtroPr('amb','${FP.amb}')">${FP.amb} <span>✕</span></button></div>`:''}
+ ${vis.length?tbl([{t:'#',n:1},{t:'Prescriptor'},{t:'Dónde ejerce'},{t:'Mix de la línea'},
+   {t:'Unidades',n:1},{t:'Facturación',n:1},{t:'Últ. prescripción'},{t:''}],
+  vis.map((x,i)=>{const mix=mixDe(x.c.id);
+   return [`${i+1}`,
+   `<b>${esc(x.c.n)}</b><div class="mini">${esc(x.c.esp||'sin especialidad')}${matDe(x.c)?' · '+esc(matDe(x.c)):''}</div>`,
+   x.inst?`${esc(x.inst)}${x.amb==='Ambos'?'<div class="mini">y consultorio propio</div>':''}`
+     :'<span class="tag">Consultorio propio</span>',
+   mix.length?`<div class="bar comp" style="min-width:90px">${mix.map(m=>`<i style="width:${m.pct}%;background:${colCat[m.k]}" title="${m.k} ${m.pct.toFixed(0)}%"></i>`).join('')}</div>
+     <div class="mini">${mix.map(m=>m.k+' '+m.pct.toFixed(0)+'%').join(' · ')}</div>`
+    :'<span class="mini">sin ventas</span>',
+   x.u||'<span class="mini">—</span>',
+   x.f?`<b>${money(x.f)}</b>`:'<span class="mini">—</span>',
+   x.d===null?'<span class="tag">nunca</span>'
+    :x.d>DORMIDO?`<span class="tag t-ser"><span class="d"></span>hace ${x.d} días</span>`
+    :`<span class="tag t-good"><span class="d"></span>${fmtF(ultimaPr(x.c.id))}</span>`,
+   `<a href="#" onclick="fichaPr(${x.c.id});return false">ver</a>`];}))
+  :vacio('Ningún prescriptor cumple el filtro.')}
+ <p class="src">La facturación se atribuye al prescriptor indicado al cargar cada venta. Lo que quedó "sin identificar" no se reparte: se muestra aparte para no inflar a nadie.</p>
+ </div>`;
+};
+
+/* ficha individual */
+function fichaPr(id){
+ const c=PR(id); if(!c)return;
+ const vs=ventasDe(id).slice().sort((a,b)=>b.f.localeCompare(a.f));
+ const prod={};vs.forEach(v=>{prod[v.p]=(prod[v.p]||0)+v.u;});
+ const ctas={};vs.forEach(v=>{const k=C(v.c)?.n||'—';ctas[k]=(ctas[k]||0)+v.u*v.pu;});
+ const d=diasSinPr(id);
+ const cuerpo=`
+  <div class="grid g3" style="margin-bottom:16px">
+   <div class="card tile" style="padding:14px"><div class="lbl">Facturación</div><div class="val" style="font-size:20px">${money(factPr(id))}</div></div>
+   <div class="card tile" style="padding:14px"><div class="lbl">Unidades</div><div class="val" style="font-size:20px">${unidPr(id)}</div></div>
+   <div class="card tile" style="padding:14px"><div class="lbl">Prescripciones</div><div class="val" style="font-size:20px">${vs.length}</div></div>
+  </div>
+  <p class="mini" style="margin-bottom:14px">
+   ${esc(c.esp||'Sin especialidad')}${matDe(c)?' · '+esc(matDe(c)):''} · ${esc(ambitoDe(c))}${dondeDe(c)?' · '+esc(dondeDe(c)):''}
+   ${c.mail?`<br>${esc(c.mail)}`:''}${c.tel?` · ${esc(c.tel)}`:''}
+   <br>Origen del contacto: ${esc(c.o||'—')}
+   ${d===null?'<br><b>Todavía no registró prescripciones.</b>':d>DORMIDO?`<br><b style="color:var(--serious)">Dormido: hace ${d} días que no prescribe.</b>`:''}
+  </p>
+  ${Object.keys(ctas).length?`<h3 style="margin-bottom:8px">Por dónde compraron</h3>
+   ${barsH(Object.entries(ctas).sort((a,b)=>b[1]-a[1]).map(([n,v])=>({n,v,t:money(v)})),'var(--s2)')}`:''}
+  ${Object.keys(prod).length?`<h3 style="margin:16px 0 8px">Qué indica</h3>
+   ${barsH(Object.entries(prod).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({n:P(k)?.n||k,v,t:v+' u.'})),'var(--s1)')}`:''}
+  ${vs.length?`<h3 style="margin:16px 0 8px">Últimas prescripciones</h3>
+   ${tbl([{t:'Fecha'},{t:'Cliente'},{t:'Producto'},{t:'Unid.',n:1},{t:'Total',n:1}],
+    vs.slice(0,10).map(v=>[fmtF(v.f),esc(C(v.c)?.n||'—'),esc(P(v.p)?.n||v.p),v.u,money(v.u*v.pu)]))}`
+   :'<p class="mini">Sin ventas atribuidas todavía.</p>'}`;
+ $('#dlg').innerHTML=`<div class="dlg-h"><h2>${esc(c.n)}</h2></div>
+  <div class="dlg-b" style="display:block">${cuerpo}</div>
+  <div class="dlg-f"><button class="btn" onclick="quitarPrescriptor(${id})">Quitar del ranking</button>
+   <button class="btn" onclick="marcarPrescriptor(${id})">Editar datos</button>
+   <button class="btn pri" onclick="$('#dlg').close();nuevaVenta(${id})">+ Cargar prescripción</button></div>`;
+ $('#dlg').classList.add('wide');$('#dlg').showModal();
+}
+
 V.reportes=()=>{
  const vm=ventasMes(MES),vp=ventasMes(MES-1);
  const porCat=['SNO','Sonda','Módulos'].map(c=>({c,v:fact(vm.filter(x=>P(x.p)?.cat===c))}));
@@ -805,11 +1057,15 @@ function dl(name,rows){
  bajar(name,new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'}));
 }
 function bajar(name,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();URL.revokeObjectURL(a.href);}
-function exportVentas(){dl(`nucleo_ventas_${MESES[MES]}_${AÑO}.csv`,[['Fecha','Cuenta','Tipo','Zona','Producto','Presentacion','Categoria','Unidades','Precio unitario','Total','Origen'],
- ...ventasMes(MES).map(v=>[v.f,C(v.c)?.n,C(v.c)?.t,C(v.c)?.z,P(v.p)?.n,P(v.p)?.pres,P(v.p)?.cat,v.u,v.pu,v.u*v.pu,v.o])]);}
+function exportVentas(){dl(`nucleo_ventas_${MESES[MES]}_${AÑO}.csv`,
+ [['Fecha','Cliente','Tipo','Zona','Prescriptor','Especialidad','Ambito','Institucion del prescriptor',
+   'Producto','Presentacion','Categoria','Unidades','Precio unitario','Total','Origen'],
+ ...ventasMes(MES).map(v=>{const p=v.pr?PR(v.pr):null;
+  return [v.f,C(v.c)?.n,C(v.c)?.t,C(v.c)?.z,p?.n||'',p?.esp||'',p?ambitoDe(p):'',p?dondeDe(p):'',
+   P(v.p)?.n,P(v.p)?.pres,P(v.p)?.cat,v.u,v.pu,v.u*v.pu,v.o];})]);}
 function exportBase(){dl('nucleo_contactos.csv',
- [['Nombre','Email','Telefono','Categoria','Pista','Profesion','Origen','Institucion','TipoOrigen','FechaAlta','Archivo','Etapa','Cuenta'],
- ...CONTACTOS.map(c=>[c.n,c.mail,c.tel,catDe(c),c.pista||'',c.r||'',c.o||'',c.i||'',c.tipo||'',c.f||'',c.arch||'',etapaDe(c),c.cta?C(c.cta)?.n:''])]);}
+ [['Nombre','Email','Telefono','Categoria','Pista','Profesion','Origen','Institucion','TipoOrigen','FechaAlta','Archivo','Etapa','Prescriptor','Especialidad','Ambito','Matricula','Cuenta'],
+ ...CONTACTOS.map(c=>[c.n,c.mail,c.tel,catDe(c),c.pista||'',c.r||'',c.o||'',c.i||'',c.tipo||'',c.f||'',c.arch||'',etapaDe(c),c.presc?'si':'no',c.esp||'',c.presc?ambitoDe(c):'',c.mat||'',c.cta?C(c.cta)?.n:''])]);}
 function exportStock(){dl(`nucleo_stock_valorizado_${MESES[MES]}_${AÑO}.csv`,
  [['Producto','Presentacion','Categoria','Lote','Unidades','Costo unitario','Valorizado a costo','Precio de lista','Valorizado a venta','Vencimiento','Dias','Estado'],
  ...LOTES.map(l=>({l,d:diasA(l.v)})).sort((a,b)=>a.d-b.d).map(r=>{const[,t]=nivelVto(r.d);
@@ -893,6 +1149,7 @@ const TIT={panel:['Panel <em>comercial</em>','Vista general de la línea'],
  tienda:['Tienda <em>online</em>','Canal ecommerce y su trazabilidad'],
  acciones:['Acciones de <em>marketing</em>','Trazabilidad hacia la venta'],
  base:['Base de <em>datos</em>','Contactos unificados por origen'],
+ prescriptores:['Ranking de <em>prescriptores</em>','Quiénes indican la línea'],
  instituciones:['<em>Instituciones</em>','Dónde tenemos presencia real'],
  reportes:['<em>Reportes</em>','Exportación mensual']};
 let VISTA='panel';

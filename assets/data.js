@@ -37,7 +37,7 @@ var PROD=[
 var CUENTAS=[], VENTAS=[], LOTES=[], ACCIONES=[], CONTACTOS=[];
 
 var ESTADOS=['Prospecto','Contactada','Muestra entregada','Primera compra','Activa','Recurrente','Dormida'];
-var TIPOS_CUENTA=['Institución','Farmacia','Distribuidor','Profesional'];
+var TIPOS_CUENTA=['Institución','Farmacia','Distribuidor','Profesional independiente'];
 var ORIGENES_VENTA=['Visita en campo','Recompra','Acción de marketing','Inbound institucional','Licitación'];
 var TIPOS_ACCION=['Jornada','Académica','Institucional','Campo','Digital','Otra'];
 
@@ -48,7 +48,15 @@ var CATEGORIAS=['A confirmar','Estudiante','Docente','Profesional'];
 /* De dónde salió el dato. Es lo único que sabemos con certeza desde el día uno. */
 var TIPOS_ORIGEN=['Académico','Asistencial','Digital','Comercial'];
 /* Cómo se mueve el contacto. Cada paso lo dispara un hecho, no una intención. */
-var ETAPAS=['Cargado','Contactado','Declaró categoría','Interactuó','Cuenta abierta'];
+var ETAPAS=['Cargado','Contactado','Declaró categoría','Interactuó','Prescribe','Cuenta abierta'];
+
+/* ---------- prescriptores ----------
+   No son una base aparte: son contactos que empezaron a indicar producto.
+   Un contacto se marca como prescriptor y ahí entra al ranking. */
+var ESPECIALIDADES=['Nutrición','Clínica médica','Oncología','Geriatría','Gastroenterología',
+ 'Terapia intensiva','Cirugía','Fonoaudiología','Enfermería','Otra'];
+/* Dónde ejerce. Puede ser las dos cosas a la vez. */
+var AMBITOS=['Institución','Consultorio propio','Ambos'];
 
 var P=id=>PROD.find(x=>x.id===id);
 var C=id=>CUENTAS.find(x=>x.id===id);
