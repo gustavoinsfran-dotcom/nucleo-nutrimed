@@ -39,6 +39,10 @@ create table if not exists contacto (
   tipo_origen   text,                             -- Académico | Asistencial | Digital | Comercial
   archivo       text,                             -- planilla de procedencia, para trazar el dato
   categoria     text not null default 'A confirmar',  -- la declara la persona, no el sistema
+  prescriptor   boolean not null default false,   -- entra al ranking de quienes indican
+  especialidad  text,
+  ambito        text,                             -- Institución | Consultorio propio | Ambos
+  matricula     text,
   pista         text,                             -- lo que el dominio sugiere. Nunca es el dato.
   etapa         text not null default 'Cargado',  -- Cargado → Contactado → Declaró categoría → Interactuó → Cuenta abierta
   cuenta_id     bigint references cuenta(id) on delete set null,
@@ -56,6 +60,11 @@ create index if not exists contacto_categoria_idx on contacto(categoria);
 -- alter table contacto add column if not exists pista text;
 -- alter table contacto add column if not exists etapa text not null default 'Cargado';
 -- alter table contacto drop column if exists consentimiento;
+-- alter table contacto add column if not exists prescriptor boolean not null default false;
+-- alter table contacto add column if not exists especialidad text;
+-- alter table contacto add column if not exists ambito text;
+-- alter table contacto add column if not exists matricula text;
+-- alter table venta   add column if not exists prescriptor_id bigint references contacto(id) on delete set null;
 
 -- ---------- Operación ----------
 create table if not exists venta (
@@ -66,11 +75,13 @@ create table if not exists venta (
   unidades        integer not null check (unidades > 0),
   precio_unitario numeric(12,2) not null,
   origen          text,
+  prescriptor_id  bigint references contacto(id) on delete set null,  -- quién la indicó
   cargado_por     text,
   creado          timestamptz not null default now()
 );
 create index if not exists venta_fecha_idx on venta(fecha);
 create index if not exists venta_cuenta_idx on venta(cuenta_id);
+create index if not exists venta_prescriptor_idx on venta(prescriptor_id);
 
 create table if not exists lote (
   sku         text not null references producto(sku),
