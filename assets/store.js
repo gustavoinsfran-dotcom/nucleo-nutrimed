@@ -47,6 +47,11 @@ const DB = {
     ACCIONES = d.ACCIONES || []; CONTACTOS = d.CONTACTOS || [];
     CFG_SHEET = d.CFG_SHEET || CFG_SHEET;
     if (d.CFG_TIENDA) CFG_TIENDA = d.CFG_TIENDA;
+    /* la estructura de precio la editan Gus y Juli: se guarda con el resto */
+    if (d.CANALES) Object.keys(d.CANALES).forEach(k => { if (CANALES[k]) Object.assign(CANALES[k], d.CANALES[k]); });
+    if (d.TRAMOS && d.TRAMOS.length === TRAMOS.length) d.TRAMOS.forEach((x, i) => TRAMOS[i].desc = x.desc);
+    if (d.PAGOS && d.PAGOS.length === PAGOS.length) d.PAGOS.forEach((x, i) => PAGOS[i].aj = x.aj);
+    if (d.MERCADO) MERCADO = d.MERCADO;
   },
   /* primera vez: deja cargadas las acciones de marketing ya realizadas */
   sembrar() {
@@ -58,7 +63,8 @@ const DB = {
   guardarLocal() {
     if (this.modo === 'vivo') return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ PROD, CUENTAS, VENTAS, LOTES, ACCIONES, CONTACTOS, CFG_SHEET, CFG_TIENDA }));
+      localStorage.setItem(KEY, JSON.stringify({ PROD, CUENTAS, VENTAS, LOTES, ACCIONES, CONTACTOS,
+        CFG_SHEET, CFG_TIENDA, CANALES, TRAMOS, PAGOS, MERCADO }));
     } catch (e) { console.warn('No se pudo guardar en el navegador', e); }
   },
 
@@ -100,7 +106,8 @@ const DB = {
     if (this.modo === 'vivo') {
       await this.sb.from('cuenta').update({
         nombre: c.n, tipo: c.t, zona: c.z, referente: c.ref, telefono: c.tel,
-        email: c.mail, estado: c.e, notas: c.notas }).eq('id', id);
+        email: c.mail, estado: c.e, notas: c.notas,
+        canal: c.canal || null, pago: c.pago || null, congelado: !!c.cong }).eq('id', id);
     }
     this.guardarLocal();
   },
@@ -214,7 +221,8 @@ const DB = {
   },
 
   /* ---------- respaldo ---------- */
-  exportar() { return JSON.stringify({ PROD, CUENTAS, VENTAS, LOTES, ACCIONES, CONTACTOS, CFG_SHEET, CFG_TIENDA }, null, 2); },
+  exportar() { return JSON.stringify({ PROD, CUENTAS, VENTAS, LOTES, ACCIONES, CONTACTOS,
+    CFG_SHEET, CFG_TIENDA, CANALES, TRAMOS, PAGOS, MERCADO }, null, 2); },
   importar(txt) {
     const d = JSON.parse(txt);
     if (d.PROD) PROD = d.PROD;

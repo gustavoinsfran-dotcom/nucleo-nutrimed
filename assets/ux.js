@@ -14,9 +14,9 @@ function bienvenida(forzar){
      <p class="wel-sub">El sistema comercial y de marketing de la línea de nutrición clínica.</p>
    </div>
    <div class="wel-body">
-     <div class="wel-item"><span>◧</span><div><b>Todo en un solo lugar</b><p>Ventas, cuentas, stock, contactos y acciones de marketing.</p></div></div>
+     <div class="wel-item"><span>◆</span><div><b>Cotizás en treinta segundos</b><p>Elegís el cliente y el producto. El precio sale solo, según el canal.</p></div></div>
      <div class="wel-item"><span>▦</span><div><b>El stock se actualiza solo</b><p>Se lee de la planilla que usa logística: ellos cargan allá, vos lo ves acá.</p></div></div>
-     <div class="wel-item"><span>◈</span><div><b>Marketing que se puede medir</b><p>Cada acción muestra los contactos que generó y las cuentas que abrió.</p></div></div>
+     <div class="wel-item"><span>▩</span><div><b>Un precio, tres canales</b><p>Se carga el precio de lista y de ahí salen institución y distribuidor.</p></div></div>
      <div class="wel-item"><span>↧</span><div><b>Reportes en un clic</b><p>El cierre del mes se exporta listo para dirección y casa matriz.</p></div></div>
    </div>
    <div class="wel-foot">
@@ -35,18 +35,16 @@ function bienvenida(forzar){
 const PASOS=[
  {v:'panel',sel:'#periodo',t:'Elegí el mes',
   d:'Todo lo que ves — facturación, ventas, reportes — corresponde al mes seleccionado acá.',pos:'abajo'},
- {v:'catalogo',sel:'.cat',t:'Tus 19 productos',
-  d:'Es la línea Bi¹ completa, tomada del vademécum. Tocá cualquiera para cargarle el precio de lista: después se usa solo al registrar una venta.',pos:'abajo'},
- {v:'cuentas',sel:'.chead .btn.pri',t:'Cargá tus instituciones',
-  d:'Hospitales, sanatorios, farmacias, droguerías y profesionales. Cada una avanza sola en el embudo cuando le cargás una venta.',pos:'izq'},
- {v:'stock',sel:'.sync',t:'Conectá la planilla de logística',
-  d:'Pegás el enlace de la planilla de Google y el stock con sus vencimientos entra solo. Cada vez que ellos la actualizan, acá se refleja.',pos:'abajo'},
- {v:'ventas',sel:'#newSale',t:'Cargar una venta: 30 segundos',
-  d:'Cuenta, producto, unidades y listo. Se descuenta el stock del lote que vence primero y se actualizan el panel y el reporte.',pos:'abajo'},
- {v:'tienda',sel:'.cadena',t:'La tienda, en el mismo tablero',
-  d:'Los pedidos online entran solos y descuentan del mismo stock. El panel te dice cuánto pesa cada canal.',pos:'abajo'},
- {v:'acciones',sel:'#views',t:'Marketing con trazabilidad',
-  d:'Cada jornada, capacitación o pauta con su inversión, los contactos que generó y las cuentas que abrió. Es el dato que justifica el presupuesto.',pos:'arriba'},
+ {v:'precios',sel:'.grid.g3',t:'Un precio, tres canales',
+  d:'Se carga el precio de lista y de ahí salen institución y distribuidor por descuento. Así no se cruzan nunca entre sí.',pos:'abajo'},
+ {v:'cuentas',sel:'.grid.g3',t:'Cada cliente tiene su canal',
+  d:'A distribuidor, B institución, C consumidor final. El canal define el precio: nadie lo elige a mano en la visita.',pos:'abajo'},
+ {v:'cotizador',sel:'#cCta',t:'Cotizar en treinta segundos',
+  d:'Elegís el cliente, agregás productos y el precio sale solo con su descuento por canal, volumen y plazo de pago.',pos:'abajo'},
+ {v:'cotizador',sel:'.chead .btn.pri',t:'Mandalo por WhatsApp',
+  d:'Un botón arma el presupuesto como imagen y te lo baja al teléfono, listo para mandárselo al cliente.',pos:'izq'},
+ {v:'stock',sel:'.sync',t:'El stock se actualiza solo',
+  d:'Subís el archivo del sistema o conectás la planilla de logística, y el stock con sus vencimientos entra solo.',pos:'abajo'},
  {v:'reportes',sel:'#views',t:'El cierre del mes',
   d:'Ventas en Excel, reporte ejecutivo en PDF y respaldo completo. Listo para mandar sin rearmar nada.',pos:'arriba'}
 ];
@@ -99,6 +97,14 @@ const tour={
 
 /* ---------- ayuda por sección ---------- */
 const AYUDA={
+ cotizador:{t:'Cotizador',d:'La herramienta con la que se vende desde la calle.',
+  l:['Elegí el cliente: su canal define el precio y su condición de pago habitual se trae sola.',
+     'Los descuentos por volumen se aplican al agregar las unidades, no hay que calcularlos.',
+     'El botón de WhatsApp baja el presupuesto como imagen, listo para mandar desde el teléfono.']},
+ precios:{t:'Precios',d:'Un solo precio de lista por producto. Los otros dos canales se derivan.',
+  l:['Tocá el precio de lista para cambiarlo: institución y distribuidor se recalculan solos.',
+     'En Editar descuentos se cambian los porcentajes por canal, volumen y plazo de pago.',
+     'Cargá el precio de la competencia para ver a qué distancia estamos del líder.']},
  panel:{t:'Panel',d:'Resumen del mes elegido: facturación, unidades, cuentas que compraron y alertas abiertas.',
   l:['Las cuatro tarjetas de arriba comparan siempre contra el mes anterior.',
      'El gráfico de evolución muestra el año completo: pasá el mouse por cada mes.',
@@ -109,40 +115,19 @@ const AYUDA={
      'El precio viene del catálogo, pero se puede cambiar en cada venta.',
      'Al guardar se descuenta el stock del lote que vence primero.',
      'La cuenta avanza sola en el embudo: primera compra, activa y recurrente.']},
- cuentas:{t:'Cuentas',d:'Instituciones, farmacias, distribuidores y profesionales, con el estado del vínculo.',
+ cuentas:{t:'Clientes',d:'Cada cliente con su canal, que es lo que define el precio que paga.',
   l:['El embudo va de prospecto a recurrente.',
      'Dormida = compró alguna vez y lleva más de 60 días sin recomprar. Es la lista de recuperación del mes.',
      'El botón editar de cada fila permite corregir datos o mover el estado a mano.']},
- catalogo:{t:'Catálogo',d:'Los 19 productos de la línea Bi¹, con precio, stock y cobertura.',
-  l:['Tocá cualquier producto para cargar o corregir el precio de lista.',
-     'La cobertura en meses compara el stock con el promedio vendido en los últimos tres meses.',
-     'Menos de dos meses de cobertura es señal de reposición.']},
  stock:{t:'Stock y vencimientos',d:'Se alimenta de la planilla de logística. También se pueden cargar lotes a mano.',
   l:['La planilla tiene que estar compartida como "Cualquiera con el enlace · Lector".',
      'Reconoce las columnas producto o SKU, lote, unidades y vencimiento, en cualquier orden.',
      'Semáforo: 180 días vigilar, 90 urgente, 60 crítico.',
      'El sistema solo lee la planilla. Nunca escribe en ella.']},
- tienda:{t:'Tienda online',d:'El canal ecommerce, con sus pedidos y su participación en el mes.',
-  l:['Los pedidos entran desde una hoja que actualiza la tienda: se pega el enlace una sola vez.',
-     'Cada pedido se registra como venta a la cuenta que factura la venta online, para respetar la cadena de comercialización.',
-     'Los pedidos descuentan del mismo stock que las ventas institucionales: es el mismo depósito.',
-     'El panel muestra cuánto pesa la tienda sobre el total del mes.']},
- acciones:{t:'Acciones',d:'Cada acción de marketing con su inversión y lo que generó.',
-  l:['Cargá jornadas, capacitaciones, muestreos, pautas y outreach.',
-     'Contactos generados y cuentas abiertas son los que convierten la acción en resultado.',
-     'Toda pieza necesita validación técnica y regulatoria antes de publicarse.']},
  base:{t:'Base de datos',d:'Todos los contactos en un solo padrón, con su origen.',
   l:['Importá un CSV para volcar de una las listas de jornadas y universidades.',
      'Buscá, filtrá y ordená; después exportás solo lo que estás viendo.',
      'Tildá varios contactos para cambiarles la categoría, la etapa o la institución de una vez.']},
- prescriptores:{t:'Prescriptores',d:'Quiénes indican la línea y cuánto pesa cada uno.',
-  l:['Un prescriptor es un contacto de la base marcado como tal: no hay que cargarlo dos veces.',
-     'Al cargar una venta se elige quién compra y, aparte, quién la indicó.',
-     'Los dormidos son los que prescribían y dejaron: recuperarlos cuesta menos que conseguir uno nuevo.']},
- instituciones:{t:'Instituciones',d:'Dónde tenemos presencia real, más allá de quién nos compró.',
-  l:['Cada universidad y hospital con cuántos contactos tiene y cómo se componen.',
-     'Que una institución figure acá no significa que sea cliente: eso se ve en Cuentas.',
-     'Tocá una fila para ver sus contactos filtrados en Base de datos.']},
  reportes:{t:'Reportes',d:'El cierre del mes, listo para mandar.',
   l:['Ventas del mes en CSV, se abre en Excel.',
      'Reporte ejecutivo en PDF desde la impresión del navegador.',

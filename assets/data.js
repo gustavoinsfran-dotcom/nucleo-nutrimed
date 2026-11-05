@@ -38,6 +38,40 @@ var CUENTAS=[], VENTAS=[], LOTES=[], ACCIONES=[], CONTACTOS=[];
 
 var ESTADOS=['Prospecto','Contactada','Muestra entregada','Primera compra','Activa','Recurrente','Dormida'];
 var TIPOS_CUENTA=['Institución','Farmacia','Distribuidor','Profesional independiente'];
+
+/* ==========================================================
+   PRECIO POR CANAL
+   El precio se define UNA vez — el de lista, canal C — y los otros
+   dos salen por descuento. Así no se cruzan nunca entre sí.
+   ========================================================== */
+var CANALES = {
+  C: {k:'C', n:'Consumidor final', d:'Paciente que compra por su cuenta, con prescripción', iva:true,  desc:0},
+  B: {k:'B', n:'Institución directa', d:'Hospital, obra social, geriátrico, licitación',    iva:true,  desc:30},
+  A: {k:'A', n:'Distribuidor',        d:'Le vendemos y él revende',                          iva:false, desc:45}
+};
+var ORDEN_CANALES = ['C','B','A'];
+
+/* Descuento extra por volumen. Se suma al del canal. */
+var TRAMOS = [
+  {min:0,   desc:0},
+  {min:24,  desc:3},
+  {min:100, desc:6},
+  {min:300, desc:10}
+];
+
+/* Condición de pago: contado premia, plazo recarga. */
+var PAGOS = [
+  {k:'Contado',          aj:-3},
+  {k:'Cheque a 30 días', aj:0},
+  {k:'30 días',          aj:0},
+  {k:'60 días',          aj:4}
+];
+
+var IVA = 21;
+
+/* Lo que cobra la competencia, por producto. Lo cargan Gus y Juli
+   los primeros días de cada mes. Es lo que marca el techo. */
+var MERCADO = [];
 var ORIGENES_VENTA=['Visita en campo','Recompra','Acción de marketing','Inbound institucional','Licitación'];
 var TIPOS_ACCION=['Jornada','Académica','Institucional','Campo','Digital','Otra'];
 

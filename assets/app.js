@@ -231,6 +231,10 @@ function nuevaCuenta(id){
  const c=id?C(id):null;
  modal({titulo:c?'Editar cuenta':'Nueva institución o cliente',ok:c?'Guardar cambios':'Dar de alta',campos:[
   {k:'n',l:'Nombre o razón social',req:true,val:c?.n,ph:'Hospital, sanatorio, farmacia, droguería o profesional'},
+  {k:'canal',l:'Canal · define el precio',t:'select',val:canalDe(c||{}),half:true,
+   opts:ORDEN_CANALES.map(x=>({v:x,t:`${x} · ${CANALES[x].n}`})),
+   hint:'A distribuidor · B institución · C consumidor final'},
+  {k:'pago',l:'Condición de pago',t:'select',val:c?.pago||'30 días',opts:PAGOS.map(p=>p.k),half:true},
   {k:'t',l:'Tipo',t:'select',opts:TIPOS_CUENTA,val:c?.t,half:true},
   {k:'z',l:'Zona',val:c?.z,ph:'CABA, GBA Norte…',half:true},
   {k:'e',l:'Estado',t:'select',opts:ESTADOS,val:c?.e||'Prospecto',half:true},
@@ -373,6 +377,44 @@ async function sincronizarTienda(){
  }catch(e){toast(e.message,'err');}
 }
 
+
+/* ============================================================
+   MOTOR DE PRECIO
+   El precio de lista (canal C, con IVA) es el único que se carga.
+   Todo lo demás se deriva: canal, volumen y condición de pago.
+   ============================================================ */
+const canalDe=c=>(c&&c.canal)||'C';
+const cfgCanal=k=>CANALES[k]||CANALES.C;
+const tramoDe=u=>TRAMOS.slice().reverse().find(t=>u>=t.min)||TRAMOS[0];
+const pagoDe=k=>PAGOS.find(p=>p.k===k)||PAGOS[1];
+
+/* Devuelve el desglose completo, no solo el número: es lo que se
+   muestra en el presupuesto para que el precio se pueda defender. */
+function cotizar(sku,canal,unidades,pago){
+ const p=P(sku); if(!p) return null;
+ const cn=cfgCanal(canal), tr=tramoDe(unidades||1), pg=pagoDe(pago);
+ const lista=p.p||0;                                   // con IVA, canal C
+ const descTotal=Math.min(90,(cn.desc||0)+(tr.desc||0)+(pg.aj||0));
+ let unit=lista*(1-descTotal/100);
+ /* el distribuidor compra sin IVA */
+ const neto=cn.iva?unit:unit/(1+IVA/100);
+ unit=cn.iva?unit:neto;
+ const u=Math.max(1,+unidades||1);
+ const costo=costoDe(sku);
+ const base=cn.iva?unit/(1+IVA/100):unit;              // comparable contra costo
+ return {p, canal:cn, unidades:u, lista, descCanal:cn.desc||0, descVolumen:tr.desc||0,
+  ajPago:pg.aj||0, pago:pg.k, descTotal, unit, total:unit*u, conIva:cn.iva,
+  costo, margen:costo?((base-costo)/base*100):null, stock:stockDe(sku)};
+}
+/* precio de lista de cada canal, sin volumen ni plazo: para la lista que se manda */
+const precioCanal=(sku,k)=>{const r=cotizar(sku,k,1,'30 días');return r?r.unit:0;};
+
+/* referencia de mercado cargada por el equipo */
+const mercadoDe=sku=>MERCADO.filter(m=>m.sku===sku);
+const lider=sku=>{const l=mercadoDe(sku).filter(m=>m.precio>0).sort((a,b)=>b.precio-a.precio)[0];return l||null;};
+const brecha=sku=>{const l=lider(sku),p=P(sku);
+ if(!l||!p||!p.p) return null; return (p.p-l.precio)/l.precio*100;};
+
 /* ============ VISTAS ============ */
 const V={};
 
@@ -483,23 +525,36 @@ V.cuentas=()=>{
  const col=['#6FC5E6','#43B0DC','#2BA4D9','#2490C0','#1E7CA6','#175E80'];
  const dorm=CUENTAS.filter(c=>c.e==='Dormida').length;
  return `<div class="card" style="margin-bottom:16px">
-  <div class="chead"><div><h3>Embudo comercial</h3><p class="sub">Dónde está parada cada cuenta hoy</p></div>
-   <button class="btn pri" onclick="nuevaCuenta()">+ Nueva institución</button></div>
+  <div class="chead"><div><h3>Embudo comercial</h3><p class="sub">Dónde está parado cada cliente hoy</p></div>
+   <button class="btn pri" onclick="nuevaCuenta()">+ Nuevo cliente</button></div>
   ${CUENTAS.length?`<div class="stage">${emb.map((e,i)=>{const n=CUENTAS.filter(c=>c.e===e).length;
    return `<div style="flex:${Math.max(1,n)};background:${col[i]};color:${i<2?'#0C1A2B':'#fff'}">${n}<small>${e}</small></div>`}).join('')}</div>
    ${dorm?`<p class="mini" style="margin-top:10px">${dorm} cuenta(s) dormida(s): compraron y llevan más de 60 días sin recomprar. Es la lista de recuperación del mes.</p>`:''}`
-   :vacio('Todavía no hay cuentas. Empezá por las instituciones con las que ya venís caminando.',{t:'+ Nueva institución',fn:'nuevaCuenta()'})}
+   :vacio('Todavía no hay clientes. Empezá por los que ya venís caminando.',{t:'+ Nuevo cliente',fn:'nuevaCuenta()'})}
  </div>
- ${CUENTAS.length?`<div class="card"><h3>Cuentas</h3><p class="sub">Instituciones, farmacias, distribuidores y profesionales</p>
- ${tbl([{t:'Cuenta'},{t:'Tipo'},{t:'Zona'},{t:'Referente'},{t:'Estado'},{t:'Facturado '+AÑO,n:1},{t:'Últ. compra',n:1},{t:''}],
+ ${CUENTAS.length?`<div class="grid g3" style="margin-bottom:16px">
+  ${ORDEN_CANALES.map(k=>{const n=CUENTAS.filter(c=>c.canal===k).length;
+   return `<div class="card tile canalbox c-${k}" style="box-shadow:none">
+    <div class="lbl">CANAL ${k} · ${esc(CANALES[k].n)}</div>
+    <div class="val" style="font-size:26px">${n}</div>
+    <div class="dlt">${CANALES[k].desc?`−${CANALES[k].desc}% sobre lista`:'precio de lista'}</div></div>`}).join('')}
+ </div>
+ ${CUENTAS.filter(c=>!c.canal).length?`<div class="demo" style="margin-bottom:16px">${CUENTAS.filter(c=>!c.canal).length} cliente(s) sin tipificar. Hasta que tengan canal se cotizan como consumidor final, que es el precio más caro.</div>`:''}`:''}
+ ${CUENTAS.length?`<div class="card"><h3>Clientes</h3><p class="sub">Tipificados por canal. El canal define el precio que paga cada uno.</p>
+ ${tbl([{t:'Cliente'},{t:'Canal'},{t:'Pago'},{t:'Zona'},{t:'Estado'},{t:'Facturado '+AÑO,n:1},{t:'Últ. compra',n:1},{t:''}],
   CUENTAS.map(c=>{const vs=VENTAS.filter(v=>v.c===c.id);
    const ult=vs.length?MESES[Math.max(...vs.map(v=>v.m))]:'—';
    const st=['Activa','Recurrente'].includes(c.e)?'t-good':c.e==='Dormida'?'t-crit':c.e==='Prospecto'?'':'t-warn';
-   return [`<b>${esc(c.n)}</b>${c.mail?`<div class="mini">${esc(c.mail)}</div>`:''}`,esc(c.t),esc(c.z),
-    `${esc(c.ref||'—')}${c.tel?`<div class="mini">${esc(c.tel)}</div>`:''}`,
+   const k=c.canal;
+   return [`<b>${esc(c.n)}</b>${c.ref?`<div class="mini">${esc(c.ref)}</div>`:''}`,
+    k?`<span class="canaltag c-${k}">${k} · ${esc(CANALES[k].n)}</span>`
+     :`<a href="#" onclick="tipificar(${c.id});return false" class="mini">sin tipificar</a>`,
+    `<span class="mini">${esc(c.pago||'—')}</span>${c.cong?'<div class="mini" style="color:var(--serious)">precio congelado</div>':''}`,
+    esc(c.z||'—'),
     `<span class="tag ${st}"><span class="d"></span>${esc(c.e)}</span>`,
     vs.length?money(fact(vs)):'—',ult,
-    `<button class="linkbtn" onclick="nuevaCuenta(${c.id})">editar</button>`];}))}
+    `<a href="#" onclick="cotCliente('${c.id}');ir('cotizador');return false">cotizar</a>
+     <div class="mini"><a href="#" onclick="nuevaCuenta(${c.id});return false">editar</a></div>`];}))}
  </div>`:''}`;
 };
 
@@ -1027,6 +1082,217 @@ function fichaPr(id){
  $('#dlg').classList.add('wide');$('#dlg').showModal();
 }
 
+
+/* ============ COTIZADOR ============
+   La pantalla con la que Juli vende desde la calle. */
+var COT={cta:'',items:[],pago:'30 días',validez:7};
+
+function cotCanal(){const c=COT.cta?C(+COT.cta):null;return c?canalDe(c):'C';}
+/* al elegir el cliente se trae su condición de pago habitual */
+function cotCliente(v){COT.cta=v;const c=v?C(+v):null;
+ if(c&&c.pago&&PAGOS.some(p=>p.k===c.pago))COT.pago=c.pago;
+ render();}
+function cotAdd(){
+ const sku=$('#cSku')?.value, u=+($('#cU')?.value||1);
+ if(!sku)return toast('Elegí un producto.','err');
+ const ex=COT.items.find(i=>i.sku===sku);
+ if(ex)ex.u+=u; else COT.items.push({sku,u});
+ render();
+}
+function cotQuitar(sku){COT.items=COT.items.filter(i=>i.sku!==sku);render();}
+function cotCant(sku,u){const i=COT.items.find(x=>x.sku===sku);if(i)i.u=Math.max(1,+u||1);render();}
+function cotLimpiar(){COT.items=[];render();}
+function cotSet(k,v){COT[k]=v;render();}
+
+const cotLineas=()=>COT.items.map(i=>cotizar(i.sku,cotCanal(),i.u,COT.pago)).filter(Boolean);
+const cotTotal=()=>cotLineas().reduce((a,l)=>a+l.total,0);
+
+V.cotizador=()=>{
+ const cta=COT.cta?C(+COT.cta):null;
+ const k=cotCanal(), cn=cfgCanal(k);
+ const lineas=cotLineas();
+ const total=cotTotal();
+ const sinPrecio=PROD.filter(p=>!p.p).length;
+ const ctas=CUENTAS.slice().sort((a,b)=>a.n.localeCompare(b.n,'es'));
+
+ return `${sinPrecio===PROD.length?`<div class="card alerta" style="margin-bottom:16px">
+   <h3>Todavía no hay precios cargados</h3>
+   <p class="sub">El cotizador necesita el precio de lista de cada producto. Se carga una vez y de ahí salen los tres canales.</p>
+   <button class="btn pri" onclick="ir('precios')">Ir a cargar precios</button></div>`:''}
+
+ <div class="grid g2" style="margin-bottom:16px;align-items:start">
+  <div class="card">
+   <h3>Cliente</h3><p class="sub">El canal define el precio. No se elige a mano.</p>
+   <div class="fld"><label>Cuenta</label>
+    <select id="cCta" onchange="cotCliente(this.value)">
+     <option value="">— Elegí el cliente —</option>
+     ${ctas.map(c=>`<option value="${c.id}"${String(COT.cta)===String(c.id)?' selected':''}>${esc(c.n)}</option>`).join('')}
+    </select></div>
+   <div class="canalbox c-${k}">
+    <div><b>Canal ${k}</b> · ${esc(cn.n)}</div>
+    <div class="mini">${esc(cn.d)}</div>
+    <div class="mini">${cn.desc?`${cn.desc}% sobre lista`:'precio de lista'} · ${cn.iva?'con IVA':'sin IVA'}</div>
+   </div>
+   ${cta&&!cta.canal?`<p class="src">Esta cuenta todavía no está tipificada: se cotiza como consumidor final.
+     <a href="#" onclick="tipificar(${cta.id});return false">Tipificarla ahora</a></p>`:''}
+   <div class="fld" style="margin-top:12px"><label>Condición de pago</label>
+    <select onchange="cotSet('pago',this.value)">
+     ${PAGOS.map(p=>`<option${COT.pago===p.k?' selected':''}>${p.k}</option>`).join('')}
+    </select>
+    <p class="hint">${(()=>{const a=pagoDe(COT.pago).aj;return a<0?`${-a}% de descuento por contado`:a>0?`${a}% de recargo por plazo`:'sin ajuste';})()}</p></div>
+  </div>
+
+  <div class="card">
+   <h3>Agregar producto</h3><p class="sub">Elegí y sumá. Los tramos de volumen se aplican solos.</p>
+   <div class="fld"><label>Producto</label>
+    <select id="cSku">
+     ${PROD.filter(p=>p.p).map(p=>`<option value="${p.id}">${esc(p.n)} · ${esc(p.pres)} — ${money(p.p)}</option>`).join('')
+       ||'<option value="">Sin productos con precio</option>'}
+    </select></div>
+   <div class="f2">
+    <div class="fld half"><label>Unidades</label><input id="cU" type="number" value="1" min="1"></div>
+    <div class="fld half" style="display:flex;align-items:flex-end">
+     <button class="btn pri" style="width:100%" onclick="cotAdd()">+ Agregar</button></div>
+   </div>
+   <p class="src">Tramos: ${TRAMOS.filter(t=>t.desc).map(t=>`${t.min}+ → ${t.desc}%`).join(' · ')}</p>
+  </div>
+ </div>
+
+ <div class="card">
+  <div class="chead"><div><h3>Presupuesto</h3>
+   <p class="sub">${lineas.length?`${lineas.length} ítem(s) · ${lineas.reduce((a,l)=>a+l.unidades,0)} unidades`:'Todavía no agregaste nada'}</p></div>
+   ${lineas.length?`<div class="btnrow">
+    <button class="btn" onclick="cotLimpiar()">Vaciar</button>
+    <button class="btn pri" onclick="bajarPresupuesto()">↧ Generar para WhatsApp</button></div>`:''}</div>
+
+ ${lineas.length?`${tbl([{t:'Producto'},{t:'Unid.',n:1},{t:'Lista',n:1},{t:'Desc.',n:1},{t:'Unitario',n:1},{t:'Total',n:1},{t:''}],
+  lineas.map(l=>[
+   `<b>${esc(l.p.n)}</b><div class="mini">${esc(l.p.pres)}${l.stock?'':' · <span style="color:var(--serious)">sin stock</span>'}</div>`,
+   `<input class="cantin" type="number" min="1" value="${l.unidades}" onchange="cotCant('${l.p.id}',this.value)">`,
+   `<span class="mini">${money(l.lista)}</span>`,
+   `${l.descTotal?`<span class="tag t-good">−${l.descTotal.toFixed(0)}%</span>`:'<span class="mini">—</span>'}`,
+   money(l.unit),`<b>${money(l.total)}</b>`,
+   `<a href="#" onclick="cotQuitar('${l.p.id}');return false" class="mini">quitar</a>`]))}
+  <div class="totbox">
+   <div><span>Subtotal ${cfgCanal(cotCanal()).iva?'con IVA':'neto, sin IVA'}</span><b>${money(total)}</b></div>
+   ${(()=>{const m=lineas.filter(l=>l.margen!=null);
+     if(!m.length)return '<div class="mini">Margen no calculable: falta el costo de estos productos.</div>';
+     const prom=m.reduce((a,l)=>a+l.margen*l.total,0)/m.reduce((a,l)=>a+l.total,0);
+     const col=prom<15?'var(--critical)':prom<20?'var(--serious)':'var(--good)';
+     return `<div class="mini">Margen promedio <b style="color:${col}">${prom.toFixed(1)}%</b>${prom<15?' — por debajo del objetivo de 15 a 20%':''}</div>`;})()}
+  </div>`
+ :vacio('Elegí un cliente y agregá productos. El precio sale solo.')}
+ </div>`;
+};
+
+/* tipificar una cuenta sin salir del cotizador */
+function tipificar(id){
+ const c=C(id); if(!c)return;
+ modal({titulo:esc(c.n),ok:'Guardar',ancho:'560px',campos:[
+  {k:'canal',l:'Canal',t:'select',val:canalDe(c),
+   opts:ORDEN_CANALES.map(x=>({v:x,t:`${x} · ${CANALES[x].n} — ${CANALES[x].desc}% sobre lista`}))},
+  {k:'pago',l:'Condición de pago habitual',t:'select',val:c.pago||'30 días',opts:PAGOS.map(p=>p.k),half:true},
+  {k:'cong',l:'',t:'check',val:!!c.cong,ph:'Tiene precio congelado (se le respeta el anterior)'}],
+  onOk:async v=>{await DB.updCuenta(id,{canal:v.canal,pago:v.pago,cong:!!v.cong});
+   toast('Cliente tipificado.','ok');render();}});
+}
+
+
+/* ============ PRECIOS ============
+   Un precio de lista por producto. Los otros dos canales se derivan.
+   Al lado, lo que cobra la competencia. */
+V.precios=()=>{
+ const conP=PROD.filter(p=>p.p).length;
+ const subs=[...new Set(PROD.map(p=>p.sub))];
+ return `<div class="card" style="margin-bottom:16px">
+  <div class="chead"><div><h3>Estructura de precio</h3>
+   <p class="sub">Se carga un solo precio por producto, el de lista. Los otros dos canales salen de acá por descuento.</p></div>
+   <div class="btnrow"><button class="btn" onclick="editarMatriz()">Editar descuentos</button>
+    <button class="btn" onclick="enviarLista()">↧ Lista por canal</button></div></div>
+  <div class="grid g3">
+   ${ORDEN_CANALES.map(k=>{const c=CANALES[k];
+    return `<div class="card canalbox c-${k}" style="box-shadow:none">
+     <div class="lbl">CANAL ${k}</div>
+     <div style="font-size:17px;font-weight:700;margin:4px 0">${esc(c.n)}</div>
+     <div class="mini">${esc(c.d)}</div>
+     <div style="font-size:24px;font-weight:800;margin-top:10px">${c.desc?`−${c.desc}%`:'lista'}</div>
+     <div class="mini">${c.iva?'con IVA':'sin IVA · neto'}</div></div>`}).join('')}
+  </div>
+  <p class="src">Volumen: ${TRAMOS.filter(t=>t.desc).map(t=>`${t.min}+ unidades → ${t.desc}%`).join(' · ')}.
+   Pago: ${PAGOS.filter(p=>p.aj).map(p=>`${p.k} → ${p.aj>0?'+':''}${p.aj}%`).join(' · ')}.</p>
+ </div>
+
+ ${conP<PROD.length?`<div class="demo" style="margin-bottom:16px">${PROD.length-conP} producto(s) sin precio de lista. Hasta que lo tengan no se pueden cotizar.</div>`:''}
+
+ <div class="card">
+  <div class="chead"><div><h3>Lista de precios</h3>
+   <p class="sub">Tocá el precio de lista para cambiarlo. Los otros tres se recalculan solos.</p></div>
+   <button class="btn" onclick="cargarMercado()">+ Precio de competencia</button></div>
+ ${subs.map(sb=>`<p class="catsub">${esc(sb)}</p>
+  ${tbl([{t:'Producto'},{t:'Costo',n:1},{t:'Lista · C',n:1},{t:'Institución · B',n:1},{t:'Distribuidor · A',n:1},{t:'Margen C',n:1},{t:'Mercado'},{t:''}],
+   PROD.filter(p=>p.sub===sb).map(p=>{
+    const b=precioCanal(p.id,'B'), a=precioCanal(p.id,'A');
+    const neto=p.p?p.p/(1+IVA/100):0;
+    const mg=p.costo&&neto?((neto-p.costo)/neto*100):null;
+    const l=lider(p.id), br=brecha(p.id);
+    return [
+     `<b>${esc(p.n)}</b><div class="mini">${esc(p.pres)}</div>`,
+     p.costo?`<span class="mini">${money(p.costo)}</span>`:'<span class="mini">—</span>',
+     `<a href="#" onclick="editarPrecio('${p.id}');return false"><b>${p.p?money(p.p):'cargar'}</b></a>`,
+     p.p?money(b):'<span class="mini">—</span>',
+     p.p?`${money(a)}<div class="mini">sin IVA</div>`:'<span class="mini">—</span>',
+     mg==null?'<span class="mini">—</span>'
+      :`<span style="color:${mg<15?'var(--critical)':mg<20?'var(--serious)':'var(--good)'};font-weight:600">${mg.toFixed(0)}%</span>`,
+     l?`<span class="mini">${esc(l.marca)} ${money(l.precio)}</span>${br!=null?`<div class="mini" style="color:${br<-35?'var(--serious)':'var(--ink-3)'}">${br>0?'+':''}${br.toFixed(0)}% vs líder</div>`:''}`
+       :'<span class="mini">sin dato</span>',
+     `<a href="#" onclick="cargarMercado('${p.id}');return false" class="mini">mercado</a>`];}))}`).join('')}
+ <p class="src">El margen se calcula sobre el precio neto, sin IVA, contra el costo que trae el archivo de ventas del sistema. Objetivo: 15 a 20%.</p>
+ </div>`;
+};
+
+function editarMatriz(){
+ modal({titulo:'Descuentos por canal',ok:'Guardar',ancho:'620px',campos:[
+  {k:'x',t:'nota',l:'',ph:'El precio de lista es el del canal C. Estos porcentajes definen lo que paga cada uno de los otros dos.'},
+  {k:'B',l:'Institución directa · canal B',t:'number',val:CANALES.B.desc,half:true,hint:'% de descuento sobre lista'},
+  {k:'A',l:'Distribuidor · canal A',t:'number',val:CANALES.A.desc,half:true,hint:'% de descuento, y se cotiza sin IVA'},
+  {k:'t1',l:'Desde 24 unidades',t:'number',val:TRAMOS[1].desc,half:true},
+  {k:'t2',l:'Desde 100 unidades',t:'number',val:TRAMOS[2].desc,half:true},
+  {k:'t3',l:'Desde 300 unidades',t:'number',val:TRAMOS[3].desc,half:true},
+  {k:'pc',l:'Contado',t:'number',val:PAGOS[0].aj,half:true,hint:'negativo = descuento'},
+  {k:'p60',l:'60 días',t:'number',val:PAGOS[3].aj,half:true,hint:'positivo = recargo'}],
+  onOk:async v=>{
+   CANALES.B.desc=+v.B; CANALES.A.desc=+v.A;
+   TRAMOS[1].desc=+v.t1; TRAMOS[2].desc=+v.t2; TRAMOS[3].desc=+v.t3;
+   PAGOS[0].aj=+v.pc; PAGOS[3].aj=+v.p60;
+   DB.guardarLocal(); toast('Estructura actualizada.','ok'); render();}});
+}
+
+function cargarMercado(sku){
+ modal({titulo:'Precio de la competencia',ok:'Guardar',ancho:'620px',campos:[
+  {k:'sku',l:'Nuestro producto',t:'select',val:sku||PROD[0].id,opts:PROD.map(p=>({v:p.id,t:p.n+' · '+p.pres}))},
+  {k:'marca',l:'Producto de la competencia',req:true,ph:'Espesan +, Fortisip, Ensure Plus…',half:true},
+  {k:'precio',l:'Precio',t:'number',req:true,half:true},
+  {k:'canal',l:'Canal relevado',t:'select',val:'C',opts:ORDEN_CANALES.map(x=>({v:x,t:`${x} · ${CANALES[x].n}`})),half:true},
+  {k:'f',l:'Fecha del relevamiento',t:'date',val:hoy(),half:true}],
+  onOk:async v=>{
+   MERCADO=MERCADO.filter(m=>!(m.sku===v.sku&&SHEET.norm(m.marca)===SHEET.norm(v.marca)));
+   MERCADO.push({sku:v.sku,marca:v.marca,precio:+v.precio,canal:v.canal,f:v.f});
+   DB.guardarLocal(); toast('Referencia cargada.','ok'); render();}});
+}
+
+/* la lista que se manda al cliente, por canal */
+function enviarLista(){
+ modal({titulo:'Lista de precios por canal',ok:'Descargar',ancho:'560px',campos:[
+  {k:'k',l:'Canal',t:'select',val:'C',opts:ORDEN_CANALES.map(x=>({v:x,t:`${x} · ${CANALES[x].n}`}))},
+  {k:'x',t:'nota',l:'',ph:'Baja un CSV con el precio de ese canal para todos los productos que tengan precio cargado.'}],
+  onOk:v=>{
+   const k=v.k, c=cfgCanal(k);
+   dl(`lista_precios_canal_${k}_${hoy()}.csv`,
+    [['Producto','Presentacion','Canal','Precio',c.iva?'Con IVA':'Sin IVA'],
+     ...PROD.filter(p=>p.p).map(p=>[p.n,p.pres,c.n,Math.round(precioCanal(p.id,k)),c.iva?'si':'no'])]);
+   toast('Lista descargada.','ok');}});
+}
+
 V.reportes=()=>{
  const vm=ventasMes(MES),vp=ventasMes(MES-1);
  const porCat=['SNO','Sonda','Módulos'].map(c=>({c,v:fact(vm.filter(x=>P(x.p)?.cat===c))}));
@@ -1050,6 +1316,101 @@ V.reportes=()=>{
  <div><h3 style="margin-bottom:10px">Por cuenta</h3>${barsH(porCta.slice(0,6).map(x=>({n:x.n,v:x.v,t:money(x.v)})),'var(--s1)')}</div></div>`
  :vacio('No hay ventas en '+MESES[MES]+' para reportar.')}</div>`;
 };
+
+
+/* ============ PRESUPUESTO COMO IMAGEN ============
+   Se dibuja con canvas: sin librerías, anda sin conexión y sale
+   listo para mandar por WhatsApp desde el celular. */
+function bajarPresupuesto(){
+ const lineas=cotLineas();
+ if(!lineas.length)return toast('No hay ítems para presupuestar.','err');
+ const cta=COT.cta?C(+COT.cta):null;
+ const cn=cfgCanal(cotCanal());
+ const W=1000, PAD=56, FILA=74;
+ const H=472+lineas.length*FILA;
+ const cv=document.createElement('canvas');
+ cv.width=W*2; cv.height=H*2;                      /* 2x para que se vea nítido */
+ const x=cv.getContext('2d'); x.scale(2,2);
+ const F=(w,s)=>`${w} ${s}px Poppins, system-ui, sans-serif`;
+
+ /* fondo */
+ x.fillStyle='#FFFFFF'; x.fillRect(0,0,W,H);
+ /* barra de marca */
+ const g=x.createLinearGradient(0,0,W,0); g.addColorStop(0,'#1BA5C9'); g.addColorStop(1,'#17C26E');
+ x.fillStyle=g; x.fillRect(0,0,W,10);
+
+ /* encabezado */
+ x.fillStyle='#0C1A2B'; x.font=F(800,34); x.fillText('Presupuesto', PAD, 86);
+ x.fillStyle='#2BA4D9'; x.font=F(700,12.5);
+ x.fillText('INFINITY NUTRICIÓN · NUTRICIÓN CLÍNICA', PAD, 112);
+ x.fillStyle='#7C8B99'; x.font=F(500,14);
+ const f=new Date(), ff=String(f.getDate()).padStart(2,'0')+'/'+String(f.getMonth()+1).padStart(2,'0')+'/'+f.getFullYear();
+ x.textAlign='right';
+ x.fillText(ff, W-PAD, 86);
+ x.fillText('Válido '+COT.validez+' días', W-PAD, 108);
+ x.textAlign='left';
+
+ /* cliente */
+ let y=160;
+ x.fillStyle='#F6FAFB'; x.beginPath(); x.roundRect(PAD,y-34,W-PAD*2,76,14); x.fill();
+ x.fillStyle='#7C8B99'; x.font=F(700,10.5); x.fillText('CLIENTE', PAD+22, y-12);
+ x.fillStyle='#0C1A2B'; x.font=F(700,19);
+ x.fillText(cta?cta.n:'Consumidor final', PAD+22, y+14);
+ x.fillStyle='#3C4A59'; x.font=F(500,13);
+ x.textAlign='right';
+ x.fillText(COT.pago, W-PAD-22, y+14);
+ x.fillStyle='#7C8B99'; x.font=F(700,10.5);
+ x.fillText(cn.iva?'PRECIOS CON IVA':'PRECIOS SIN IVA', W-PAD-22, y-12);
+ x.textAlign='left';
+
+ /* encabezado de tabla */
+ y+=92;
+ x.fillStyle='#2BA4D9'; x.font=F(700,10.5);
+ x.fillText('PRODUCTO', PAD, y);
+ x.textAlign='right';
+ x.fillText('UNID.', PAD+600, y); x.fillText('UNITARIO', PAD+760, y); x.fillText('TOTAL', W-PAD, y);
+ x.textAlign='left';
+ y+=10; x.strokeStyle='#E7EEF1'; x.lineWidth=1;
+ x.beginPath(); x.moveTo(PAD,y); x.lineTo(W-PAD,y); x.stroke();
+
+ /* filas */
+ lineas.forEach(l=>{
+  y+=FILA;
+  x.fillStyle='#0C1A2B'; x.font=F(600,16);
+  x.fillText(l.p.n, PAD, y-18);
+  x.fillStyle='#7C8B99'; x.font=F(400,12.5);
+  x.fillText(l.p.pres+(l.descTotal?`  ·  ${l.descTotal.toFixed(0)}% de descuento`:''), PAD, y);
+  x.fillStyle='#3C4A59'; x.font=F(500,15); x.textAlign='right';
+  x.fillText(String(l.unidades), PAD+600, y-8);
+  x.fillText(money(l.unit), PAD+760, y-8);
+  x.fillStyle='#0C1A2B'; x.font=F(700,15);
+  x.fillText(money(l.total), W-PAD, y-8);
+  x.textAlign='left';
+  x.strokeStyle='#F0F5F7'; x.beginPath(); x.moveTo(PAD,y+14); x.lineTo(W-PAD,y+14); x.stroke();
+ });
+
+ /* total */
+ y+=58;
+ x.fillStyle='#E6F8EF'; x.beginPath(); x.roundRect(PAD,y-32,W-PAD*2,70,14); x.fill();
+ x.fillStyle='#0C1A2B'; x.font=F(600,15); x.fillText('Total', PAD+22, y+10);
+ x.font=F(800,30); x.textAlign='right';
+ x.fillText(money(cotTotal()), W-PAD-22, y+14);
+ x.textAlign='left';
+
+ /* pie */
+ y+=92;
+ x.fillStyle='#7C8B99'; x.font=F(400,12);
+ x.fillText('Presupuesto sujeto a disponibilidad de stock. Los precios pueden variar sin aviso previo.', PAD, y);
+ x.fillText('Una línea de Infinity Pharma.', PAD, y+20);
+
+ const nom='Presupuesto_'+(cta?cta.n.replace(/[^\w]+/g,'_').slice(0,28):'cliente')+'_'+ff.replace(/\//g,'-')+'.png';
+ cv.toBlob(b=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=nom; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  toast('Presupuesto descargado. Ya lo podés mandar por WhatsApp.','ok');
+ },'image/png');
+}
 
 /* ============ EXPORT ============ */
 function dl(name,rows){
@@ -1142,21 +1503,19 @@ function importarCSV(file){
 
 /* ============ RENDER ============ */
 const TIT={panel:['Panel <em>comercial</em>','Vista general de la línea'],
+ cotizador:['<em>Cotizador</em>','Precio al instante, listo para mandar'],
+ cuentas:['<em>Clientes</em>','Tipificados por canal'],
+ precios:['Estructura de <em>precios</em>','Un precio de lista, tres canales'],
  ventas:['Registro de <em>ventas</em>','Carga y detalle de operaciones'],
- cuentas:['Cartera de <em>cuentas</em>','Embudo comercial e instituciones'],
- catalogo:['<em>Catálogo</em> de productos','Línea Bi¹ · precios y stock'],
  stock:['Stock y <em>vencimientos</em>','Sincronizado con logística'],
- tienda:['Tienda <em>online</em>','Canal ecommerce y su trazabilidad'],
- acciones:['Acciones de <em>marketing</em>','Trazabilidad hacia la venta'],
  base:['Base de <em>datos</em>','Contactos unificados por origen'],
- prescriptores:['Ranking de <em>prescriptores</em>','Quiénes indican la línea'],
- instituciones:['<em>Instituciones</em>','Dónde tenemos presencia real'],
  reportes:['<em>Reportes</em>','Exportación mensual']};
 let VISTA='panel';
-function ir(v){VISTA=v;document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+function ir(v){if(!V[v])v='panel';VISTA=v;document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
  cerrarMenu();render();window.scrollTo({top:0,behavior:'smooth'});}
 
 function render(){
+ if(!V[VISTA])VISTA='panel';
  $('#views').innerHTML=V[VISTA]();
  $('#vTitle').innerHTML=TIT[VISTA][0];
  $('#vSub').textContent=`${MESES[MES]} ${AÑO} · ${TIT[VISTA][1]}`;

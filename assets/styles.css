@@ -484,3 +484,34 @@ td.sel input,th.sel input{width:15px;height:15px;accent-color:var(--verde);curso
 .card.alerta{border-color:rgba(226,122,69,.28);background:linear-gradient(180deg,#FFF9F5,var(--surface) 60px)}
 .card.alerta h3{color:var(--serious)}
 .bar.comp{min-height:6px}
+
+/* ==========================================================
+   COTIZADOR Y CANALES
+   ========================================================== */
+.canalbox{border-radius:var(--r-sm);padding:14px 16px;margin-top:12px;
+ border:1px solid var(--border);background:var(--plane)}
+.canalbox.c-C{background:var(--verde-050);border-color:rgba(23,194,110,.28)}
+.canalbox.c-B{background:var(--celeste);border-color:rgba(43,164,217,.28)}
+.canalbox.c-A{background:#EEF3F7;border-color:rgba(14,110,156,.26)}
+.canalbox .lbl{font-size:10px;letter-spacing:.14em;font-weight:700;color:var(--cian)}
+
+.canaltag{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.canaltag.c-C{background:var(--verde-050);color:var(--success-text)}
+.canaltag.c-B{background:var(--celeste);color:#1E7CA6}
+.canaltag.c-A{background:#E4EBF1;color:#0E6E9C}
+
+.cantin{width:72px;border:1px solid var(--border);border-radius:8px;padding:5px 8px;
+ text-align:right;font-variant-numeric:tabular-nums;background:var(--surface);color:var(--navy)}
+.cantin:focus{outline:none;border-color:var(--cian);box-shadow:0 0 0 3px rgba(43,164,217,.14)}
+
+.totbox{margin-top:16px;padding:16px 18px;border-radius:var(--r-sm);background:var(--verde-050);
+ border:1px solid rgba(23,194,110,.26)}
+.totbox>div:first-child{display:flex;justify-content:space-between;align-items:baseline;gap:16px}
+.totbox>div:first-child span{font-size:14px;color:var(--gris)}
+.totbox>div:first-child b{font-size:26px;font-weight:800;letter-spacing:-.02em;color:var(--navy)}
+.totbox .mini{margin-top:6px}
+
+@media (max-width:760px){
+ .cantin{width:64px}
+ .totbox>div:first-child b{font-size:22px}
+}
